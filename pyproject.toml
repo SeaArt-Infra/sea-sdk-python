@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "seaart-sdk"
+version = "0.1.0"
+description = "Python SDK for SeaArt AI gateway APIs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+  { name = "SeaArt" }
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://gitlab.internal.ops.haiyiai.tech/seaart-infra/seaart_sdk_py"
+Repository = "https://gitlab.internal.ops.haiyiai.tech/seaart-infra/seaart_sdk_py"
+
+[tool.setuptools.packages.find]
+include = ["seaart_sdk*"]

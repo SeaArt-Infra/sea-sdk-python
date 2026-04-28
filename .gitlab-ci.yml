@@ -1,0 +1,33 @@
+image: python:3.12
+
+stages:
+  - test
+  - publish
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_CACHE_DIR: "1"
+
+before_script:
+  - python --version
+  - pip install --upgrade pip
+
+test:
+  stage: test
+  script:
+    - python -m unittest discover -s tests -v
+
+build_and_publish_gitlab:
+  stage: publish
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  script:
+    - pip install --upgrade build twine
+    - python -m build
+    - python -m twine check dist/*
+    - >
+      python -m twine upload
+      --repository-url "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi"
+      -u gitlab-ci-token
+      -p "${CI_JOB_TOKEN}"
+      dist/*

@@ -1,0 +1,246 @@
+# seaart-sdk
+
+SeaArt AI 平台 Python SDK，按 `seaart_sdk_go` 的公开接口翻译实现，当前提供三类能力：
+
+- `client.modal` / `client.Modal`：多模态任务接口
+- `client.llm` / `client.LLM`：LLM 透传接口
+- `client.passthrough` / `client.Passthrough`：厂商原始 API 透传接口
+
+特点：
+
+- 纯标准库实现，无第三方运行时依赖
+- 保留原始请求透传能力
+- 支持 SSE 流式响应解析
+- 支持任务轮询和通用 task builder
+
+## 安装
+
+本地开发：
+
+```bash
+pip install -e .
+```
+
+要求：
+
+- Python 3.10+
+
+## 初始化
+
+```python
+import seaart_sdk as sa
+
+client = sa.Client(
+    sa.ClientConfig(
+        api_key="sa-your-api-key",
+    )
+)
+```
+
+默认网关配置：
+
+- `base_url`: `https://gateway.example.com`
+- `model_base_url`: `https://gateway.example.com/model`
+- `llm_base_url`: `https://gateway.example.com/llm`
+- `passthrough_base_url`: `https://gateway.example.com/model`
+
+也可以分别覆盖：
+
+```python
+client = sa.Client(
+    sa.ClientConfig(
+        api_key="sa-your-api-key",
+        base_url="https://gateway.example.com",
+        model_base_url="https://mm-gateway.example.com",
+        llm_base_url="https://llm-gateway.example.com",
+        passthrough_base_url="https://mm-gateway.example.com",
+        timeout=60.0,
+        project="my-project",
+    )
+)
+```
+
+## Modal API
+
+原始透传请求：
+
+```python
+task = client.modal.create(
+    {
+        "model": "vidu_q3_reference",
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "cinematic shot"},
+                    {"type": "image_url", "url": "https://example.com/ref1.webp"},
+                    {"type": "image_url", "url": "https://example.com/ref2.webp"},
+                ],
+            }
+        ],
+        "parameters": {"duration": 5},
+    },
+    sa.WithHeader("X-Trace-Id", "trace-123"),
+)
+
+print(task.id, task.status)
+```
+
+等待任务完成：
+
+```python
+task = client.modal.wait(
+    "task_abc123",
+    sa.WithPollInterval(3.0),
+    sa.WithPollTimeout(300.0),
+)
+
+print(task.status, task.progress, task.urls())
+```
+
+也可以在创建后继续等待：
+
+```python
+task = client.modal.create({"model": "vidu_q3_reference"})
+task = task.wait(sa.WithPollInterval(3.0))
+```
+
+Typed helper：
+
+```python
+body = (
+    sa.NewTask("vidu_q3_reference")
+    .user(
+        sa.Text("cinematic shot"),
+        sa.ImageURL("https://example.com/ref1.webp"),
+        sa.ImageURL("https://example.com/ref2.webp"),
+    )
+    .param("duration", 5)
+    .metadata("trace_id", "trace-123")
+    .build()
+)
+
+task = client.modal.create(body)
+```
+
+## Passthrough API
+
+Passthrough 层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
+
+```python
+resp = client.passthrough.post(
+    "/kling/v1/videos/text2video",
+    {
+        "model_name": "kling-v1",
+        "prompt": "cinematic shot",
+    },
+    sa.WithHeader("X-Trace-Id", "trace-123"),
+)
+
+print(resp.status_code, resp.body.decode("utf-8"))
+```
+
+如果要完全透传原始 JSON 字节，使用 `request_raw`：
+
+```python
+resp = client.passthrough.request_raw(
+    "POST",
+    "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
+    b'{"contents":[{"parts":[{"text":"paint a cat"}]}]}',
+)
+```
+
+当前提供：
+
+- `request`
+- `request_raw`
+- `get`
+- `post`
+- `put`
+- `delete`
+
+## LLM API
+
+LLM 层保持“请求透传 + 原始响应返回”的形式：
+
+```python
+raw = client.llm.chat_completions(
+    {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "hello"}],
+        "max_tokens": 64,
+    },
+    sa.WithHeader("X-Trace-Id", "trace-123"),
+)
+
+resp = sa.Decode(raw, sa.ChatCompletionResponse)
+print(resp.choices[0].message.content)
+```
+
+当前支持：
+
+- `chat_completions`
+- `chat_completions_stream`
+- `messages`
+- `messages_stream`
+- `responses`
+- `responses_stream`
+- `rerank`
+- `embeddings`
+- `list_models`
+
+流式响应示例：
+
+```python
+stream = client.llm.chat_completions_stream(
+    {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "hello"}],
+    }
+)
+
+for event in stream:
+    if event.err:
+        raise event.err
+    if event.done:
+        break
+    chunk = sa.Decode(event.data, sa.ChatCompletionResponse)
+    print(chunk.choices[0].delta.content)
+```
+
+## 测试
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+## 发布
+
+本地打包与检查：
+
+```bash
+make check
+```
+
+发布到默认 `twine` 仓库配置：
+
+```bash
+make release
+```
+
+发布到 GitLab Package Registry：
+
+```bash
+make release-gitlab \
+  TWINE_REPOSITORY_URL="https://<gitlab-host>/api/v4/projects/<project_id>/packages/pypi" \
+  TWINE_USERNAME="__token__" \
+  TWINE_PASSWORD="<token>"
+```
+
+GitLab CI 已配置为在打 tag 时自动构建并发布到当前项目的 Package Registry：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```

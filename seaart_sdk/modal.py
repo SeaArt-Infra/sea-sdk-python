@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+import json
+import time
+from http import HTTPStatus
+
+from .errors import ERR_NETWORK, ERR_TASK_FAILED, ERR_TIMEOUT, SeaArtError, new_http_error
+from .modal_types import (
+    APIError,
+    GenerationResponse,
+    PollOption,
+    Task,
+    apply_poll_options,
+)
+from .request_options import RequestOption, build_request_options
+from .serialization import decode
+from .transport import TransportClient
+
+STATUS_COMPLETED = "completed"
+STATUS_FAILED = "failed"
+POLL_NETWORK_RETRY_LIMIT = 3
+
+
+class ModalService:
+    def __init__(self, client: TransportClient) -> None:
+        self._client = client
+
+    def create(self, body: dict[str, object], *options: RequestOption) -> Task:
+        request_options = build_request_options(options)
+        status, payload = self._client.request("POST", "/v1/generation", body, request_options.headers)
+        if status >= 400:
+            raise _http_error(status, payload)
+
+        response = decode(payload, GenerationResponse)
+        if not response.id:
+            raise SeaArtError(kind="general", message="API returned no task ID")
+        return Task(
+            id=response.id,
+            status=response.status,
+            model=response.model,
+            error=response.error,
+            _service=self,
+        )
+
+    def get(self, task_id: str, *options: RequestOption) -> Task:
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "GET",
+            f"/v1/generation/task/{task_id}",
+            None,
+            request_options.headers,
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        task = decode(payload, Task)
+        task._service = self
+        return task
+
+    def wait(self, task_id: str, *options: PollOption) -> Task:
+        config = apply_poll_options(options)
+        deadline = time.monotonic() + config.timeout
+        network_errors = 0
+
+        while time.monotonic() < deadline:
+            try:
+                task = self.get(task_id)
+            except SeaArtError as exc:
+                if exc.kind == ERR_NETWORK and network_errors < POLL_NETWORK_RETRY_LIMIT:
+                    network_errors += 1
+                    time.sleep(config.interval)
+                    continue
+                exc.task_id = exc.task_id or task_id
+                raise
+
+            network_errors = 0
+            status = task.status.lower()
+            if config.on_update is not None:
+                config.on_update(status, task.progress)
+
+            if status == STATUS_COMPLETED:
+                return task
+            if status == STATUS_FAILED:
+                message = "task failed"
+                if isinstance(task.error, APIError) and task.error.error_message:
+                    message = f"task failed: {task.error.error_message}"
+                raise SeaArtError(kind=ERR_TASK_FAILED, message=message, task_id=task_id)
+
+            time.sleep(config.interval)
+
+        raise SeaArtError(
+            kind=ERR_TIMEOUT,
+            message=f"task timed out after {_format_seconds(config.timeout)}",
+            task_id=task_id,
+        )
+
+
+def _format_seconds(seconds: float) -> str:
+    if seconds.is_integer():
+        return f"{int(seconds)}s"
+    return f"{seconds}s"
+
+
+def _http_error(status: int, payload: bytes) -> SeaArtError:
+    message = HTTPStatus(status).phrase if status in HTTPStatus._value2member_map_ else "HTTP error"
+    try:
+        parsed = json.loads(payload.decode("utf-8"))
+    except Exception:
+        return new_http_error(status, message)
+
+    if isinstance(parsed, dict):
+        error_payload = parsed.get("error")
+        if isinstance(error_payload, dict) and error_payload.get("error_message"):
+            message = str(error_payload["error_message"])
+    return new_http_error(status, message)
