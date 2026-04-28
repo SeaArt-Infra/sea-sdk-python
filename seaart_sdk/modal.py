@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 import time
 from http import HTTPStatus
+from urllib.parse import quote, urlencode
 
 from .errors import ERR_NETWORK, ERR_TASK_FAILED, ERR_TIMEOUT, SeaArtError, new_http_error
 from .modal_types import (
     APIError,
     GenerationResponse,
+    ModelSearchParams,
+    ModelSearchResponse,
     PollOption,
     Task,
     apply_poll_options,
@@ -41,6 +44,57 @@ class ModalService:
             error=response.error,
             _service=self,
         )
+
+    def list_models(self, params: ModelSearchParams | None = None, *options: RequestOption) -> ModelSearchResponse:
+        """Search multimodal model skills via GET /v1/models/skill/search.
+
+        Supported params:
+        - query maps to q
+        - input maps to input
+        - output maps to output
+        - type maps to type
+        - provider maps to provider
+        - limit maps to limit
+        """
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "GET",
+            f"/v1/models/skill/search{_model_search_query(params)}",
+            None,
+            _with_default_header(request_options.headers, "Accept", "application/json"),
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        return decode(payload, ModelSearchResponse)
+
+    def search_models(self, params: ModelSearchParams | None = None, *options: RequestOption) -> ModelSearchResponse:
+        """Search multimodal model skills via GET /v1/models/skill/search.
+
+        Supported params:
+        - query maps to q
+        - input maps to input
+        - output maps to output
+        - type maps to type
+        - provider maps to provider
+        - limit maps to limit
+        """
+        return self.list_models(params, *options)
+
+    def get_model_skill(self, model: str, *options: RequestOption) -> str:
+        model = model.strip()
+        if not model:
+            raise SeaArtError(kind="general", message="model is required")
+
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "GET",
+            f"/v1/models/skill/{quote(model, safe='')}",
+            None,
+            _with_default_header(request_options.headers, "Accept", "application/json"),
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        return payload.decode("utf-8")
 
     def get(self, task_id: str, *options: RequestOption) -> Task:
         request_options = build_request_options(options)
@@ -92,6 +146,34 @@ class ModalService:
             message=f"task timed out after {_format_seconds(config.timeout)}",
             task_id=task_id,
         )
+
+
+def _model_search_query(params: ModelSearchParams | None) -> str:
+    params = params or ModelSearchParams()
+    values: dict[str, str] = {"q": params.query}
+    if params.input:
+        values["input"] = params.input
+    if params.output:
+        values["output"] = params.output
+    if params.type:
+        values["type"] = params.type
+    if params.provider:
+        values["provider"] = params.provider
+    if params.limit > 0:
+        values["limit"] = str(params.limit)
+    return "?" + urlencode(values)
+
+
+def _with_default_header(
+    headers: dict[str, list[str]],
+    key: str,
+    value: str,
+) -> dict[str, list[str]]:
+    if key in headers:
+        return headers
+    cloned = {name: list(values) for name, values in headers.items()}
+    cloned[key] = [value]
+    return cloned
 
 
 def _format_seconds(seconds: float) -> str:

@@ -124,6 +124,31 @@ body = (
 task = client.modal.create(body)
 ```
 
+模型列表和参数详情：
+
+```python
+models = client.modal.list_models(
+    sa.ModelSearchParams(
+        query="",
+        limit=2,
+    )
+)
+for hit in models.hits:
+    print(hit["name"])
+
+skill = client.modal.get_model_skill("alibaba_animate_anyone_detect")
+print(skill)
+```
+
+`list_models` / `search_models` 支持的查询参数：
+
+- `query` -> `q`
+- `input` -> `input`
+- `output` -> `output`
+- `type` -> `type`
+- `provider` -> `provider`
+- `limit` -> `limit`
+
 ## Passthrough API
 
 Passthrough 层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。

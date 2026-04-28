@@ -88,6 +88,30 @@ class Task:
 
 
 @dataclass(slots=True)
+class ModelSearchParams:
+    query: str = ""
+    input: str = ""
+    output: str = ""
+    type: str = ""
+    provider: str = ""
+    limit: int = 0
+
+
+@dataclass(slots=True)
+class ModelSearchResponse:
+    hits: list[dict[str, Any]] = field(default_factory=list)
+    query: str = ""
+    processing_time_ms: int = field(default=0, metadata={"json": "processingTimeMs"})
+    limit: int = 0
+    offset: int = 0
+    estimated_total_hits: int = field(default=0, metadata={"json": "estimatedTotalHits"})
+    total_hits: int = field(default=0, metadata={"json": "totalHits"})
+    total_pages: int = field(default=0, metadata={"json": "totalPages"})
+    page: int = 0
+    hits_per_page: int = field(default=0, metadata={"json": "hitsPerPage"})
+
+
+@dataclass(slots=True)
 class ContentPart:
     type: str
     text: str = ""

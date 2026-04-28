@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 import unittest
+from urllib.parse import parse_qs, urlparse
 
-from seaart_sdk import ERR_TASK_FAILED, ImageURL, NewTask, SeaArtError, Text, WithHeader, WithPollInterval, WithPollTimeout
+from seaart_sdk import (
+    ERR_TASK_FAILED,
+    ImageURL,
+    ModelSearchParams,
+    NewTask,
+    SeaArtError,
+    Text,
+    WithHeader,
+    WithPollInterval,
+    WithPollTimeout,
+)
 
-from test_helpers import json_response, make_client, patch_urlopen, request_headers, request_json, request_path
+from test_helpers import FakeResponse, json_response, make_client, patch_urlopen, request_headers, request_json, request_path
 
 
 class ModalServiceTests(unittest.TestCase):
@@ -68,6 +79,100 @@ class ModalServiceTests(unittest.TestCase):
         self.assertEqual(task.status, "completed")
         self.assertEqual(task.progress, 1.0)
         self.assertEqual(task.urls(), ["https://example.com/out.mp4"])
+
+    def test_list_models_searches_skill_models(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "GET")
+            self.assertEqual(request_path(request), "/v1/models/skill/search")
+            self.assertEqual(request_headers(request)["Authorization"], "Bearer test-key")
+            self.assertEqual(request_headers(request)["Accept"], "application/json")
+
+            query = parse_qs(urlparse(request.full_url).query)
+            self.assertEqual(query["q"], ["animate"])
+            self.assertEqual(query["input"], ["image"])
+            self.assertEqual(query["output"], ["video"])
+            self.assertEqual(query["type"], ["i2v"])
+            self.assertEqual(query["provider"], ["alibaba"])
+            self.assertEqual(query["limit"], ["2"])
+
+            return json_response(
+                200,
+                {
+                    "hits": [
+                        {
+                            "id": "alibaba_animate_anyone_detect",
+                            "name": "alibaba_animate_anyone_detect",
+                            "provider": "alibaba",
+                            "input": "image",
+                            "output": "video",
+                            "media_type": "video",
+                            "tags": ["i2v"],
+                            "tags_abbr": "i2v",
+                            "skill_content": "# alibaba_animate_anyone_detect",
+                        }
+                    ],
+                    "query": "animate",
+                    "limit": 2,
+                    "estimatedTotalHits": 1,
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.list_models(
+                ModelSearchParams(
+                    query="animate",
+                    input="image",
+                    output="video",
+                    type="i2v",
+                    provider="alibaba",
+                    limit=2,
+                )
+            )
+
+        self.assertEqual(response.query, "animate")
+        self.assertEqual(response.limit, 2)
+        self.assertEqual(response.estimated_total_hits, 1)
+        self.assertEqual(len(response.hits), 1)
+        self.assertEqual(response.hits[0]["name"], "alibaba_animate_anyone_detect")
+
+    def test_search_models_alias(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "GET")
+            self.assertEqual(request_path(request), "/v1/models/skill/search")
+            query = parse_qs(urlparse(request.full_url).query, keep_blank_values=True)
+            self.assertEqual(query["q"], [""])
+            self.assertEqual(query["limit"], ["2"])
+            return json_response(200, {"hits": [], "query": "", "limit": 2})
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.search_models(ModelSearchParams(limit=2))
+
+        self.assertEqual(response.limit, 2)
+
+    def test_get_model_skill_returns_markdown(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "GET")
+            self.assertEqual(request_path(request), "/v1/models/skill/alibaba_animate_anyone_detect")
+            self.assertEqual(request_headers(request)["Authorization"], "Bearer test-key")
+            self.assertEqual(request_headers(request)["Accept"], "application/json")
+            return FakeResponse(
+                200,
+                b"# alibaba_animate_anyone_detect\n\nparameters",
+                headers={"Content-Type": "text/markdown; charset=utf-8"},
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            content = client.modal.get_model_skill("alibaba_animate_anyone_detect")
+
+        self.assertEqual(content, "# alibaba_animate_anyone_detect\n\nparameters")
+
+    def test_get_model_skill_requires_model(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.get_model_skill(" ")
 
     def test_wait_completes(self) -> None:
         polls = {"count": 0}

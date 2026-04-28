@@ -58,6 +58,8 @@ from .modal_types import (
     ContentPart,
     GenerationResponse,
     InputItem,
+    ModelSearchParams,
+    ModelSearchResponse,
     Output,
     OutputContent,
     PollConfig,
@@ -96,6 +98,8 @@ VideoURL = video_url
 AudioURL = audio_url
 FileID = file_id
 User = user
+ModalModelSearchParams = ModelSearchParams
+ModalModelSearchResponse = ModelSearchResponse
 
 __all__ = [
     "APIError",
@@ -137,6 +141,10 @@ __all__ = [
     "MessagesStreamDelta",
     "MessagesStreamMessage",
     "MessagesStreamTextAssembler",
+    "ModalModelSearchParams",
+    "ModalModelSearchResponse",
+    "ModelSearchParams",
+    "ModelSearchResponse",
     "New",
     "NewTask",
     "Output",
