@@ -147,6 +147,15 @@ print(result.ok, result.nsfw_level, result.risk_types)
 
 视频检测设置 `is_video=1`，可传 `duration`；响应中的 `frame_results` 包含帧级检测结果。
 
+风险类型说明：
+
+| 常量 | 接口值 | 说明 |
+|------|--------|------|
+| `sa.ImageScanRiskTypePolity` | `POLITY` | 政治敏感、公共安全等风险内容 |
+| `sa.ImageScanRiskTypeErotic` | `EROTIC` | 色情、裸露、性暗示等成人内容 |
+| `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
+| `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
+
 ---
 
 ## Passthrough API（厂商透传）

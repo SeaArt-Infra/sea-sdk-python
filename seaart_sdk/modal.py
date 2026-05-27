@@ -103,6 +103,7 @@ class ModalService:
         request: ImageScanRequest | dict[str, object],
         *options: RequestOption,
     ) -> ImageScanResponse:
+        """Scan an image, GIF, or video through model_base_url + /v1/image/scan."""
         body = request.raw() if isinstance(request, ImageScanRequest) else request
         uri = str(body.get("uri", "")).strip()
         if not uri:

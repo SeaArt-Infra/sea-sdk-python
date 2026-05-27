@@ -17,11 +17,16 @@ class APIError:
 
 
 RiskType = str
+"""Image scan risk category value used in request risk_types and response risk_types."""
 
 
+# Political or public-safety sensitive content.
 IMAGE_SCAN_RISK_TYPE_POLITY = "POLITY"
+# Erotic, pornographic, nudity, or sexually suggestive content.
 IMAGE_SCAN_RISK_TYPE_EROTIC = "EROTIC"
+# Violent, bloody, weapon, or gore-related content.
 IMAGE_SCAN_RISK_TYPE_VIOLENT = "VIOLENT"
+# Child-safety risks, especially sexualized or unsafe child-related content.
 IMAGE_SCAN_RISK_TYPE_CHILD = "CHILD"
 
 
@@ -56,6 +61,17 @@ class Usage:
 
 @dataclass(slots=True)
 class ImageScanRequest:
+    """Request body for POST /v1/image/scan.
+
+    Attributes:
+        uri: Image, GIF, or video URL to scan.
+        risk_types: Safety categories to detect. Use ImageScanRiskTypePolity,
+            ImageScanRiskTypeErotic, ImageScanRiskTypeViolent, and/or ImageScanRiskTypeChild.
+        detected_age: Set to 1 to enable age-group detection; set to 0 to disable it.
+        is_video: Set to 1 when uri points to video content; images and GIFs use 0.
+        duration: Video duration in seconds, used for video billing when known.
+    """
+
     uri: str
     risk_types: list[RiskType] = field(default_factory=list)
     detected_age: int = 0
@@ -76,6 +92,14 @@ class ImageScanRequest:
 
 @dataclass(slots=True)
 class ImageScanLabel:
+    """Detailed safety label detected by the scan service.
+
+    Attributes:
+        name: Provider label name, for example a scene/category/tag path.
+        score: Label risk score or level, usually aligned to the 0-6 risk scale.
+        risk_type: Safety category this label belongs to.
+    """
+
     name: str = ""
     score: int = 0
     risk_type: RiskType = ""
@@ -83,6 +107,15 @@ class ImageScanLabel:
 
 @dataclass(slots=True)
 class ImageScanFrameResult:
+    """Per-frame result for video scans.
+
+    Attributes:
+        frame_index: Sampled frame index in the video.
+        nsfw_level: Highest risk level detected on this frame.
+        label_items: Detailed labels detected on this frame.
+        risk_types: Risk categories detected on this frame.
+    """
+
     frame_index: int = 0
     nsfw_level: int = 0
     label_items: list[ImageScanLabel] = field(default_factory=list)
@@ -91,6 +124,24 @@ class ImageScanFrameResult:
 
 @dataclass(slots=True)
 class ImageScanResponse:
+    """Parsed response returned by POST /v1/image/scan.
+
+    Attributes:
+        ok: Whether the scan service completed the business request successfully.
+        nsfw_level: Highest risk level, usually 0-6. Higher values indicate higher risk.
+        label_items: Detailed labels detected on image content or the highest-risk frame.
+        risk_types: Risk categories actually detected in the media.
+        age_group: Provider-specific age-group output, typically age bucket and confidence.
+        error: Scan service business error when ok is false.
+        video_duration: Duration detected or used by the upstream video scanner, in seconds.
+        max_risk_frame: Frame index with the highest risk in a video scan.
+        frame_count: Total number of frames sampled or considered by the scanner.
+        frames_checked: Actual number of frames scanned before completion or early exit.
+        early_exit: Whether the scanner stopped early after finding a high-risk frame.
+        frame_results: Per-frame results for video scans.
+        usage: Gateway billing metadata injected by inference-gateway.
+    """
+
     ok: bool = False
     nsfw_level: int = 0
     label_items: list[ImageScanLabel] = field(default_factory=list)
