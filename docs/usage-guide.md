@@ -128,6 +128,41 @@ for output in task.output:
         print(f"类型: {content.type}, URL: {content.url}")
 ```
 
+### 图片/视频鉴黄
+
+鉴黄接口走 `model_base_url`，对应 `POST /v1/image/scan`，用于图片、GIF 或视频风险检测。
+
+```python
+result = client.modal.scan_image(
+    sa.ImageScanRequest(
+        uri="https://example.com/image.jpg",
+        risk_types=[
+            sa.ImageScanRiskTypePolity,
+            sa.ImageScanRiskTypeErotic,
+            sa.ImageScanRiskTypeViolent,
+            sa.ImageScanRiskTypeChild,
+        ],
+        detected_age=0,
+        is_video=0,
+    )
+)
+
+print(result.ok, result.nsfw_level, result.risk_types)
+for label in result.label_items:
+    print(label.name, label.score, label.risk_type)
+```
+
+视频检测设置 `is_video=1`，可传 `duration`：
+
+```python
+result = client.modal.scan_image({
+    "uri": "https://example.com/video.mp4",
+    "risk_types": [sa.ImageScanRiskTypeErotic, sa.ImageScanRiskTypeViolent],
+    "is_video": 1,
+    "duration": 12.5,
+})
+```
+
 **Task 状态：** `"in_progress"` / `"completed"` / `"failed"`
 
 ---

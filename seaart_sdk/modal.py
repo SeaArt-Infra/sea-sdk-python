@@ -9,6 +9,8 @@ from .errors import ERR_NETWORK, ERR_TASK_FAILED, ERR_TIMEOUT, SeaArtError, new_
 from .modal_types import (
     APIError,
     GenerationResponse,
+    ImageScanRequest,
+    ImageScanResponse,
     ModelSearchParams,
     ModelSearchResponse,
     PollOption,
@@ -95,6 +97,27 @@ class ModalService:
         if status >= 400:
             raise _http_error(status, payload)
         return payload.decode("utf-8")
+
+    def scan_image(
+        self,
+        request: ImageScanRequest | dict[str, object],
+        *options: RequestOption,
+    ) -> ImageScanResponse:
+        body = request.raw() if isinstance(request, ImageScanRequest) else request
+        uri = str(body.get("uri", "")).strip()
+        if not uri:
+            raise SeaArtError(kind="general", message="uri is required")
+
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "POST",
+            "/v1/image/scan",
+            body,
+            request_options.headers,
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        return decode(payload, ImageScanResponse)
 
     def get(self, task_id: str, *options: RequestOption) -> Task:
         request_options = build_request_options(options)

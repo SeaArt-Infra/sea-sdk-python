@@ -5,6 +5,9 @@ from urllib.parse import parse_qs, urlparse
 
 from seaart_sdk import (
     ERR_TASK_FAILED,
+    ImageScanRequest,
+    ImageScanRiskTypeErotic,
+    ImageScanRiskTypeViolent,
     ImageURL,
     ModelSearchParams,
     NewTask,
@@ -173,6 +176,84 @@ class ModalServiceTests(unittest.TestCase):
         client = make_client()
         with self.assertRaises(SeaArtError):
             client.modal.get_model_skill(" ")
+
+    def test_scan_image_posts_image_scan_request(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/image/scan")
+            self.assertEqual(request_headers(request)["Authorization"], "Bearer test-key")
+            self.assertEqual(request_headers(request)["X-trace-id"], "trace-scan")
+
+            body = request_json(request)
+            self.assertEqual(body["uri"], "https://example.com/image.jpg")
+            self.assertEqual(body["risk_types"], ["EROTIC", "VIOLENT"])
+            self.assertEqual(body["detected_age"], 1)
+            self.assertEqual(body["is_video"], 0)
+
+            return json_response(
+                200,
+                {
+                    "ok": True,
+                    "nsfw_level": 2,
+                    "label_items": [{"name": "safe", "score": 2, "risk_type": "EROTIC"}],
+                    "risk_types": ["EROTIC"],
+                    "usage": {"cost": "0.001"},
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_image(
+                ImageScanRequest(
+                    uri="https://example.com/image.jpg",
+                    risk_types=[ImageScanRiskTypeErotic, ImageScanRiskTypeViolent],
+                    detected_age=1,
+                ),
+                WithHeader("X-Trace-Id", "trace-scan"),
+            )
+
+        self.assertTrue(response.ok)
+        self.assertEqual(response.nsfw_level, 2)
+        self.assertEqual(response.label_items[0].risk_type, "EROTIC")
+        self.assertIsNotNone(response.usage)
+        self.assertEqual(response.usage.cost, "0.001")
+
+    def test_scan_image_accepts_raw_dict(self) -> None:
+        def handler(request):
+            self.assertEqual(request_path(request), "/v1/image/scan")
+            self.assertEqual(request_json(request)["is_video"], 1)
+            return json_response(
+                200,
+                {
+                    "ok": True,
+                    "frame_results": [
+                        {
+                            "frame_index": 3,
+                            "nsfw_level": 1,
+                            "risk_types": ["VIOLENT"],
+                        }
+                    ],
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_image(
+                {
+                    "uri": "https://example.com/video.mp4",
+                    "risk_types": [ImageScanRiskTypeViolent],
+                    "is_video": 1,
+                    "duration": 5.2,
+                }
+            )
+
+        self.assertEqual(response.frame_results[0].frame_index, 3)
+        self.assertEqual(response.frame_results[0].risk_types, ["VIOLENT"])
+
+    def test_scan_image_requires_uri(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.scan_image(ImageScanRequest(uri=" "))
 
     def test_wait_completes(self) -> None:
         polls = {"count": 0}

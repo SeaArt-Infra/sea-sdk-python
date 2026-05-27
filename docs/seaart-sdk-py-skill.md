@@ -125,6 +125,28 @@ for url in task.urls():
 
 **Task 状态：** `"in_progress"` / `"completed"` / `"failed"`
 
+### 图片/视频鉴黄
+
+使用 `client.modal.scan_image` 调用 `model_base_url + /v1/image/scan`。
+
+```python
+result = client.modal.scan_image(
+    sa.ImageScanRequest(
+        uri="https://example.com/image.jpg",
+        risk_types=[
+            sa.ImageScanRiskTypePolity,
+            sa.ImageScanRiskTypeErotic,
+            sa.ImageScanRiskTypeViolent,
+            sa.ImageScanRiskTypeChild,
+        ],
+        is_video=0,
+    )
+)
+print(result.ok, result.nsfw_level, result.risk_types)
+```
+
+视频检测设置 `is_video=1`，可传 `duration`；响应中的 `frame_results` 包含帧级检测结果。
+
 ---
 
 ## Passthrough API（厂商透传）

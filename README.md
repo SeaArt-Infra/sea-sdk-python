@@ -149,6 +149,41 @@ print(skill)
 - `provider` -> `provider`
 - `limit` -> `limit`
 
+图片/视频鉴黄：
+
+鉴黄接口复用 `model_base_url`，对应 `POST /v1/image/scan`。请求会通过 openresty 转发到 inference-gateway。
+
+```python
+result = client.modal.scan_image(
+    sa.ImageScanRequest(
+        uri="https://example.com/image.jpg",
+        risk_types=[
+            sa.ImageScanRiskTypePolity,
+            sa.ImageScanRiskTypeErotic,
+            sa.ImageScanRiskTypeViolent,
+            sa.ImageScanRiskTypeChild,
+        ],
+        detected_age=0,
+        is_video=0,
+    )
+)
+
+print(result.ok, result.nsfw_level, result.risk_types)
+```
+
+也可以直接传 dict。视频检测时设置 `is_video=1`，并可传 `duration` 用于计费：
+
+```python
+result = client.modal.scan_image({
+    "uri": "https://example.com/video.mp4",
+    "risk_types": [sa.ImageScanRiskTypeErotic, sa.ImageScanRiskTypeViolent],
+    "is_video": 1,
+    "duration": 12.5,
+})
+```
+
+常用响应字段包括 `ok`、`nsfw_level`、`label_items`、`risk_types`、`frame_results` 和 `usage`。
+
 ## Passthrough API
 
 Passthrough 层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。

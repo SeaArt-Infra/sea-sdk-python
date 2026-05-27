@@ -16,6 +16,15 @@ class APIError:
         return self.error_message or "unknown API error"
 
 
+RiskType = str
+
+
+IMAGE_SCAN_RISK_TYPE_POLITY = "POLITY"
+IMAGE_SCAN_RISK_TYPE_EROTIC = "EROTIC"
+IMAGE_SCAN_RISK_TYPE_VIOLENT = "VIOLENT"
+IMAGE_SCAN_RISK_TYPE_CHILD = "CHILD"
+
+
 @dataclass(slots=True)
 class OutputContent:
     job_id: str = field(default="", metadata={"json": "jobId"})
@@ -43,6 +52,58 @@ class Usage:
         if self.cost is None:
             return 0.0
         return float(self.cost)
+
+
+@dataclass(slots=True)
+class ImageScanRequest:
+    uri: str
+    risk_types: list[RiskType] = field(default_factory=list)
+    detected_age: int = 0
+    is_video: int = 0
+    duration: float = 0.0
+
+    def raw(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "uri": self.uri,
+            "risk_types": self.risk_types,
+            "detected_age": self.detected_age,
+            "is_video": self.is_video,
+        }
+        if self.duration:
+            body["duration"] = self.duration
+        return body
+
+
+@dataclass(slots=True)
+class ImageScanLabel:
+    name: str = ""
+    score: int = 0
+    risk_type: RiskType = ""
+
+
+@dataclass(slots=True)
+class ImageScanFrameResult:
+    frame_index: int = 0
+    nsfw_level: int = 0
+    label_items: list[ImageScanLabel] = field(default_factory=list)
+    risk_types: list[RiskType] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ImageScanResponse:
+    ok: bool = False
+    nsfw_level: int = 0
+    label_items: list[ImageScanLabel] = field(default_factory=list)
+    risk_types: list[RiskType] = field(default_factory=list)
+    age_group: list[Any] = field(default_factory=list)
+    error: str = ""
+    video_duration: float = 0.0
+    max_risk_frame: int = 0
+    frame_count: int = 0
+    frames_checked: int = 0
+    early_exit: bool = False
+    frame_results: list[ImageScanFrameResult] = field(default_factory=list)
+    usage: Usage | None = None
 
 
 @dataclass(slots=True)

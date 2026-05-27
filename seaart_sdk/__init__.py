@@ -54,9 +54,17 @@ from .llm_types import (
     StreamEvent,
 )
 from .modal_types import (
+    IMAGE_SCAN_RISK_TYPE_CHILD,
+    IMAGE_SCAN_RISK_TYPE_EROTIC,
+    IMAGE_SCAN_RISK_TYPE_POLITY,
+    IMAGE_SCAN_RISK_TYPE_VIOLENT,
     APIError,
     ContentPart,
     GenerationResponse,
+    ImageScanFrameResult,
+    ImageScanLabel,
+    ImageScanRequest,
+    ImageScanResponse,
     InputItem,
     ModelSearchParams,
     ModelSearchResponse,
@@ -68,6 +76,7 @@ from .modal_types import (
     TaskCreateRequest,
     TaskMetadata,
     Usage,
+    RiskType,
     apply_poll_options,
     audio_url,
     file_id,
@@ -98,6 +107,10 @@ VideoURL = video_url
 AudioURL = audio_url
 FileID = file_id
 User = user
+ImageScanRiskTypePolity = IMAGE_SCAN_RISK_TYPE_POLITY
+ImageScanRiskTypeErotic = IMAGE_SCAN_RISK_TYPE_EROTIC
+ImageScanRiskTypeViolent = IMAGE_SCAN_RISK_TYPE_VIOLENT
+ImageScanRiskTypeChild = IMAGE_SCAN_RISK_TYPE_CHILD
 ModalModelSearchParams = ModelSearchParams
 ModalModelSearchResponse = ModelSearchResponse
 
@@ -125,7 +138,19 @@ __all__ = [
     "ERR_TIMEOUT",
     "FileID",
     "GenerationResponse",
+    "IMAGE_SCAN_RISK_TYPE_CHILD",
+    "IMAGE_SCAN_RISK_TYPE_EROTIC",
+    "IMAGE_SCAN_RISK_TYPE_POLITY",
+    "IMAGE_SCAN_RISK_TYPE_VIOLENT",
     "ImageURL",
+    "ImageScanFrameResult",
+    "ImageScanLabel",
+    "ImageScanRequest",
+    "ImageScanResponse",
+    "ImageScanRiskTypeChild",
+    "ImageScanRiskTypeErotic",
+    "ImageScanRiskTypePolity",
+    "ImageScanRiskTypeViolent",
     "InputItem",
     "JSONMap",
     "LLMFunctionCall",
@@ -167,6 +192,7 @@ __all__ = [
     "RerankResult",
     "RerankTokens",
     "RerankUsage",
+    "RiskType",
     "SDK_VERSION",
     "SeaArtError",
     "StreamEvent",
