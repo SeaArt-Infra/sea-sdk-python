@@ -107,9 +107,13 @@ VideoURL = video_url
 AudioURL = audio_url
 FileID = file_id
 User = user
+# Detect political or public-safety sensitive content in image scans.
 ImageScanRiskTypePolity = IMAGE_SCAN_RISK_TYPE_POLITY
+# Detect erotic, pornographic, nudity, or sexually suggestive content in image scans.
 ImageScanRiskTypeErotic = IMAGE_SCAN_RISK_TYPE_EROTIC
+# Detect violent, bloody, weapon, or gore-related content in image scans.
 ImageScanRiskTypeViolent = IMAGE_SCAN_RISK_TYPE_VIOLENT
+# Detect child-safety risks, especially sexualized or unsafe child-related content.
 ImageScanRiskTypeChild = IMAGE_SCAN_RISK_TYPE_CHILD
 ModalModelSearchParams = ModelSearchParams
 ModalModelSearchResponse = ModelSearchResponse
