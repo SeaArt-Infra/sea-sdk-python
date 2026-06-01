@@ -172,6 +172,27 @@ result = client.modal.scan_image({
 | `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
 | `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
 
+### 敏感词检测
+
+敏感词检测接口走 `model_base_url`，对应 `POST /v1/text/scan`。
+
+```python
+result = client.modal.scan_text(
+    sa.TextScanRequest(
+        text="prompt to check",
+        scene=1,
+        area_types=[1, 2],
+        way=2,
+        scenes=["prompt"],
+    )
+)
+
+print(result.usage)
+print(result.extra.get("result"))
+```
+
+上游返回中的未建模字段会保留在 `extra`，网关注入的计费信息在 `usage`。
+
 ### 人脸检测
 
 人脸检测接口走 `model_base_url`，对应 `POST /v1/face/scan`，用于图片或视频人脸检测。网关会转发到上游 `/cloud/face/scan`。

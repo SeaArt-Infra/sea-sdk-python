@@ -17,6 +17,8 @@ from .modal_types import (
     ModelSearchResponse,
     PollOption,
     Task,
+    TextScanRequest,
+    TextScanResponse,
     apply_poll_options,
 )
 from .request_options import RequestOption, build_request_options
@@ -144,6 +146,28 @@ class ModalService:
         if status >= 400:
             raise _http_error(status, payload)
         return decode(payload, FaceScanResponse)
+
+    def scan_text(
+        self,
+        request: TextScanRequest | dict[str, object],
+        *options: RequestOption,
+    ) -> TextScanResponse:
+        """Scan prompt text through model_base_url + /v1/text/scan."""
+        body = request.raw() if isinstance(request, TextScanRequest) else request
+        text = str(body.get("text", "")).strip()
+        if not text:
+            raise SeaArtError(kind="general", message="text is required")
+
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "POST",
+            "/v1/text/scan",
+            body,
+            request_options.headers,
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        return decode(payload, TextScanResponse)
 
     def get(self, task_id: str, *options: RequestOption) -> Task:
         request_options = build_request_options(options)

@@ -158,6 +158,51 @@ class ImageScanResponse:
 
 
 @dataclass(slots=True)
+class TextScanRequest:
+    """Request body for POST /v1/text/scan.
+
+    Attributes:
+        text: Prompt or text content to scan for sensitive words.
+        scene: Upstream moderation scenario.
+        area_types: Upstream area categories to detect.
+        way: Upstream matching mode.
+        scenes: Additional upstream scene names.
+    """
+
+    text: str
+    scene: int = 0
+    area_types: list[int] = field(default_factory=list)
+    way: int = 0
+    scenes: list[str] = field(default_factory=list)
+
+    def raw(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "text": self.text,
+            "scene": self.scene,
+        }
+        if self.area_types:
+            body["area_types"] = self.area_types
+        if self.way:
+            body["way"] = self.way
+        if self.scenes:
+            body["scenes"] = self.scenes
+        return body
+
+
+@dataclass(slots=True)
+class TextScanResponse:
+    """Parsed response returned by POST /v1/text/scan.
+
+    The upstream sensitive-word service owns most response fields, so extra
+    keeps provider-specific fields available while usage is decoded for gateway
+    billing.
+    """
+
+    usage: Usage | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class FaceScanRequest:
     """Request body for POST /v1/face/scan.
 

@@ -14,6 +14,7 @@ from seaart_sdk import (
     NewTask,
     SeaArtError,
     Text,
+    TextScanRequest,
     WithHeader,
     WithPollInterval,
     WithPollTimeout,
@@ -322,6 +323,65 @@ class ModalServiceTests(unittest.TestCase):
         client = make_client()
         with self.assertRaises(SeaArtError):
             client.modal.scan_face(FaceScanRequest(uri=" ", img_base64=" "))
+
+    def test_scan_text_posts_text_scan_request(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/text/scan")
+            self.assertEqual(request_headers(request)["Authorization"], "Bearer test-key")
+            self.assertEqual(request_headers(request)["X-trace-id"], "trace-text")
+
+            body = request_json(request)
+            self.assertEqual(body["text"], "a prompt to check")
+            self.assertEqual(body["scene"], 1)
+            self.assertEqual(body["area_types"], [1, 2])
+            self.assertEqual(body["way"], 2)
+            self.assertEqual(body["scenes"], ["prompt"])
+
+            return json_response(
+                200,
+                {
+                    "code": 0,
+                    "message": "ok",
+                    "result": {"pass": True},
+                    "usage": {"cost": "0.003"},
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_text(
+                TextScanRequest(
+                    text="a prompt to check",
+                    scene=1,
+                    area_types=[1, 2],
+                    way=2,
+                    scenes=["prompt"],
+                ),
+                WithHeader("X-Trace-Id", "trace-text"),
+            )
+
+        self.assertIsNotNone(response.usage)
+        self.assertEqual(response.usage.cost, "0.003")
+        self.assertEqual(response.extra["code"], 0)
+        self.assertEqual(response.extra["result"]["pass"], True)
+
+    def test_scan_text_accepts_raw_dict(self) -> None:
+        def handler(request):
+            self.assertEqual(request_path(request), "/v1/text/scan")
+            self.assertEqual(request_json(request)["scene"], 2)
+            return json_response(200, {"code": 0, "result": {"pass": False}})
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_text({"text": "raw prompt", "scene": 2})
+
+        self.assertEqual(response.extra["result"]["pass"], False)
+
+    def test_scan_text_requires_text(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.scan_text(TextScanRequest(text=" "))
 
     def test_wait_completes(self) -> None:
         polls = {"count": 0}
