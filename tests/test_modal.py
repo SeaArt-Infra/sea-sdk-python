@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlparse
 
 from seaart_sdk import (
     ERR_TASK_FAILED,
+    FaceScanRequest,
     ImageScanRequest,
     ImageScanRiskTypeErotic,
     ImageScanRiskTypeViolent,
@@ -254,6 +255,73 @@ class ModalServiceTests(unittest.TestCase):
         client = make_client()
         with self.assertRaises(SeaArtError):
             client.modal.scan_image(ImageScanRequest(uri=" "))
+
+    def test_scan_face_posts_face_scan_request(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/face/scan")
+            self.assertEqual(request_headers(request)["Authorization"], "Bearer test-key")
+            self.assertEqual(request_headers(request)["X-trace-id"], "trace-face")
+
+            body = request_json(request)
+            self.assertEqual(body["uri"], "https://example.com/face.jpg")
+            self.assertEqual(body["is_video"], 0)
+            self.assertEqual(body["canary"], "gray")
+            self.assertEqual(body["scene"], "avatar")
+
+            return json_response(
+                200,
+                {
+                    "ok": True,
+                    "face_count": 1,
+                    "faces": [{"score": 0.99}],
+                    "usage": {"cost": "0.002"},
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_face(
+                FaceScanRequest(
+                    uri="https://example.com/face.jpg",
+                    is_video=0,
+                    canary="gray",
+                    scene="avatar",
+                ),
+                WithHeader("X-Trace-Id", "trace-face"),
+            )
+
+        self.assertTrue(response.ok)
+        self.assertIsNotNone(response.usage)
+        self.assertEqual(response.usage.cost, "0.002")
+        self.assertEqual(response.extra["face_count"], 1)
+        self.assertEqual(response.extra["faces"][0]["score"], 0.99)
+
+    def test_scan_face_accepts_raw_dict_and_base64(self) -> None:
+        def handler(request):
+            self.assertEqual(request_path(request), "/v1/face/scan")
+            body = request_json(request)
+            self.assertEqual(body["img_base64"], "abc123")
+            self.assertEqual(body["is_video"], 1)
+            self.assertEqual(body["duration"], 12.5)
+            return json_response(200, {"ok": True, "video_duration": 12.5})
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_face(
+                {
+                    "img_base64": "abc123",
+                    "is_video": 1,
+                    "duration": 12.5,
+                }
+            )
+
+        self.assertEqual(response.extra["video_duration"], 12.5)
+
+    def test_scan_face_requires_uri_or_base64(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.scan_face(FaceScanRequest(uri=" ", img_base64=" "))
 
     def test_wait_completes(self) -> None:
         polls = {"count": 0}

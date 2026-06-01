@@ -193,6 +193,25 @@ result = client.modal.scan_image({
 | `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
 | `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
 
+人脸检测：
+
+人脸检测接口复用 `model_base_url`，对应 `POST /v1/face/scan`，由 openresty 转发到 inference-gateway，再转发到上游 `/cloud/face/scan`。
+
+```python
+result = client.modal.scan_face(
+    sa.FaceScanRequest(
+        uri="https://example.com/image.jpg",
+        is_video=0,
+        scene="avatar",
+    )
+)
+
+print(result.ok, result.usage)
+print(result.extra.get("face_count"))
+```
+
+也可以传 `img_base64`。视频检测时设置 `is_video=1`，并可传 `duration` 用于计费。上游人脸检测返回结构会保留在 `result.extra`，网关注入的计费信息在 `result.usage`。
+
 ## Passthrough API
 
 Passthrough 层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。

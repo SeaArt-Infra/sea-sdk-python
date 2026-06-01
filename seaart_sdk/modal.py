@@ -8,6 +8,8 @@ from urllib.parse import quote, urlencode
 from .errors import ERR_NETWORK, ERR_TASK_FAILED, ERR_TIMEOUT, SeaArtError, new_http_error
 from .modal_types import (
     APIError,
+    FaceScanRequest,
+    FaceScanResponse,
     GenerationResponse,
     ImageScanRequest,
     ImageScanResponse,
@@ -119,6 +121,29 @@ class ModalService:
         if status >= 400:
             raise _http_error(status, payload)
         return decode(payload, ImageScanResponse)
+
+    def scan_face(
+        self,
+        request: FaceScanRequest | dict[str, object],
+        *options: RequestOption,
+    ) -> FaceScanResponse:
+        """Scan an image or video through model_base_url + /v1/face/scan."""
+        body = request.raw() if isinstance(request, FaceScanRequest) else request
+        uri = str(body.get("uri", "")).strip()
+        img_base64 = str(body.get("img_base64", "")).strip()
+        if not uri and not img_base64:
+            raise SeaArtError(kind="general", message="uri or img_base64 is required")
+
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "POST",
+            "/v1/face/scan",
+            body,
+            request_options.headers,
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        return decode(payload, FaceScanResponse)
 
     def get(self, task_id: str, *options: RequestOption) -> Task:
         request_options = build_request_options(options)

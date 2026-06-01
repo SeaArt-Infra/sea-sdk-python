@@ -72,6 +72,8 @@ def _convert_dataclass(value: Any, dataclass_type: type[Any]) -> Any:
     for field_info in fields(dataclass_type):
         if field_info.name.startswith("_"):
             continue
+        if field_info.name == "extra":
+            continue
         json_key = field_info.metadata.get("json", field_info.name)
         if json_key not in value:
             continue
@@ -79,4 +81,15 @@ def _convert_dataclass(value: Any, dataclass_type: type[Any]) -> Any:
             value[json_key],
             type_hints.get(field_info.name, field_info.type),
         )
+    if any(field_info.name == "extra" for field_info in fields(dataclass_type)):
+        known_keys = {
+            field_info.metadata.get("json", field_info.name)
+            for field_info in fields(dataclass_type)
+            if not field_info.name.startswith("_") and field_info.name != "extra"
+        }
+        kwargs["extra"] = {
+            key: item
+            for key, item in value.items()
+            if key not in known_keys
+        }
     return dataclass_type(**kwargs)

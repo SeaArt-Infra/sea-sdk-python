@@ -172,6 +172,25 @@ result = client.modal.scan_image({
 | `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
 | `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
 
+### 人脸检测
+
+人脸检测接口走 `model_base_url`，对应 `POST /v1/face/scan`，用于图片或视频人脸检测。网关会转发到上游 `/cloud/face/scan`。
+
+```python
+result = client.modal.scan_face(
+    sa.FaceScanRequest(
+        uri="https://example.com/image.jpg",
+        is_video=0,
+        scene="avatar",
+    )
+)
+
+print(result.ok, result.usage)
+print(result.extra.get("face_count"))
+```
+
+也可以传 `img_base64`。视频检测设置 `is_video=1`，可传 `duration`。上游返回中的未建模字段会保留在 `extra`。
+
 **Task 状态：** `"in_progress"` / `"completed"` / `"failed"`
 
 ---

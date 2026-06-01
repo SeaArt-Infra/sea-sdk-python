@@ -158,6 +158,57 @@ class ImageScanResponse:
 
 
 @dataclass(slots=True)
+class FaceScanRequest:
+    """Request body for POST /v1/face/scan.
+
+    Attributes:
+        uri: Image or video URL to scan.
+        img_base64: Base64-encoded image payload. uri or img_base64 is required.
+        is_video: Set to 1 when uri points to video content; images use 0.
+        canary: Canary routing value forwarded to the upstream face scan service.
+        scene: Scenario value forwarded to the upstream face scan service.
+        duration: Video duration in seconds, used for video billing when known.
+    """
+
+    uri: str = ""
+    img_base64: str = ""
+    is_video: int = 0
+    canary: str = ""
+    scene: str = ""
+    duration: float = 0.0
+
+    def raw(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "is_video": self.is_video,
+        }
+        if self.uri:
+            body["uri"] = self.uri
+        if self.img_base64:
+            body["img_base64"] = self.img_base64
+        if self.canary:
+            body["canary"] = self.canary
+        if self.scene:
+            body["scene"] = self.scene
+        if self.duration:
+            body["duration"] = self.duration
+        return body
+
+
+@dataclass(slots=True)
+class FaceScanResponse:
+    """Parsed response returned by POST /v1/face/scan.
+
+    The upstream face scan service owns most response fields, so extra keeps
+    provider-specific fields available while usage is decoded for gateway billing.
+    """
+
+    ok: bool = False
+    error: str = ""
+    usage: Usage | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class TaskMetadata:
     completed_at: float = 0.0
     in_queue_at: float = 0.0
