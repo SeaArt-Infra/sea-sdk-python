@@ -14,7 +14,9 @@ from seaart_sdk import (
     NewTask,
     SeaArtError,
     Text,
+    TextScanAreaTypeForeign,
     TextScanRequest,
+    TextScanWayDictionary,
     WithHeader,
     WithPollInterval,
     WithPollTimeout,
@@ -334,16 +336,27 @@ class ModalServiceTests(unittest.TestCase):
             body = request_json(request)
             self.assertEqual(body["text"], "a prompt to check")
             self.assertEqual(body["scene"], 1)
-            self.assertEqual(body["area_types"], [1, 2])
-            self.assertEqual(body["way"], 2)
-            self.assertEqual(body["scenes"], ["prompt"])
+            self.assertEqual(body["area_types"], [2])
+            self.assertEqual(body["way"], 0)
 
             return json_response(
                 200,
                 {
-                    "code": 0,
-                    "message": "ok",
-                    "result": {"pass": True},
+                    "data": {
+                        "sensitive_words": [
+                            {
+                                "word": "blocked",
+                                "start_index": 2,
+                                "end_index": 8,
+                                "risk_type_code": "political",
+                            }
+                        ]
+                    },
+                    "status": {
+                        "code": 10000,
+                        "msg": "success",
+                        "request_id": "risk-req-1",
+                    },
                     "usage": {"cost": "0.003"},
                 },
             )
@@ -354,29 +367,45 @@ class ModalServiceTests(unittest.TestCase):
                 TextScanRequest(
                     text="a prompt to check",
                     scene=1,
-                    area_types=[1, 2],
-                    way=2,
-                    scenes=["prompt"],
+                    area_types=[TextScanAreaTypeForeign],
+                    way=TextScanWayDictionary,
                 ),
                 WithHeader("X-Trace-Id", "trace-text"),
             )
 
+        self.assertIsNotNone(response.status)
+        self.assertEqual(response.status.code, 10000)
+        self.assertEqual(response.status.request_id, "risk-req-1")
+        self.assertIsNotNone(response.data)
+        self.assertEqual(len(response.data.sensitive_words), 1)
+        word = response.data.sensitive_words[0]
+        self.assertEqual(word.word, "blocked")
+        self.assertEqual(word.start_index, 2)
+        self.assertEqual(word.end_index, 8)
+        self.assertEqual(word.risk_type_code, "political")
         self.assertIsNotNone(response.usage)
         self.assertEqual(response.usage.cost, "0.003")
-        self.assertEqual(response.extra["code"], 0)
-        self.assertEqual(response.extra["result"]["pass"], True)
+        self.assertEqual(response.extra, {})
 
     def test_scan_text_accepts_raw_dict(self) -> None:
         def handler(request):
             self.assertEqual(request_path(request), "/v1/text/scan")
             self.assertEqual(request_json(request)["scene"], 2)
-            return json_response(200, {"code": 0, "result": {"pass": False}})
+            return json_response(
+                200,
+                {
+                    "data": {"sensitive_words": []},
+                    "status": {"code": 10000, "msg": "success"},
+                    "debug": {"pass": False},
+                },
+            )
 
         client = make_client()
         with patch_urlopen(handler):
             response = client.modal.scan_text({"text": "raw prompt", "scene": 2})
 
-        self.assertEqual(response.extra["result"]["pass"], False)
+        self.assertEqual(response.status.code, 10000)
+        self.assertEqual(response.extra["debug"]["pass"], False)
 
     def test_scan_text_requires_text(self) -> None:
         client = make_client()

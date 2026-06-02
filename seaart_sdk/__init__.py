@@ -58,6 +58,13 @@ from .modal_types import (
     IMAGE_SCAN_RISK_TYPE_EROTIC,
     IMAGE_SCAN_RISK_TYPE_POLITY,
     IMAGE_SCAN_RISK_TYPE_VIOLENT,
+    TEXT_SCAN_AREA_TYPE_ALL,
+    TEXT_SCAN_AREA_TYPE_DOMESTIC,
+    TEXT_SCAN_AREA_TYPE_FOREIGN,
+    TEXT_SCAN_WAY_CHARACTER,
+    TEXT_SCAN_WAY_DICTIONARY,
+    TEXT_SCAN_WAY_MIXED,
+    TEXT_SCAN_WAY_MODEL,
     APIError,
     ContentPart,
     FaceScanRequest,
@@ -77,8 +84,13 @@ from .modal_types import (
     TaskBuilder,
     TaskCreateRequest,
     TaskMetadata,
+    TextScanAreaType,
+    TextScanData,
     TextScanRequest,
     TextScanResponse,
+    TextScanSensitiveWord,
+    TextScanStatus,
+    TextScanWay,
     Usage,
     RiskType,
     apply_poll_options,
@@ -119,6 +131,20 @@ ImageScanRiskTypeErotic = IMAGE_SCAN_RISK_TYPE_EROTIC
 ImageScanRiskTypeViolent = IMAGE_SCAN_RISK_TYPE_VIOLENT
 # Detect child-safety risks, especially sexualized or unsafe child-related content.
 ImageScanRiskTypeChild = IMAGE_SCAN_RISK_TYPE_CHILD
+# Check both domestic and foreign regional sensitive-word rule sets.
+TextScanAreaTypeAll = TEXT_SCAN_AREA_TYPE_ALL
+# Check the domestic regional sensitive-word rule set.
+TextScanAreaTypeDomestic = TEXT_SCAN_AREA_TYPE_DOMESTIC
+# Check the foreign regional sensitive-word rule set.
+TextScanAreaTypeForeign = TEXT_SCAN_AREA_TYPE_FOREIGN
+# Use dictionary matching. This is the upstream default.
+TextScanWayDictionary = TEXT_SCAN_WAY_DICTIONARY
+# Use the big-data model checker.
+TextScanWayModel = TEXT_SCAN_WAY_MODEL
+# Use both dictionary and model checks.
+TextScanWayMixed = TEXT_SCAN_WAY_MIXED
+# Use the digital-human checker.
+TextScanWayCharacter = TEXT_SCAN_WAY_CHARACTER
 ModalModelSearchParams = ModelSearchParams
 ModalModelSearchResponse = ModelSearchResponse
 
@@ -152,6 +178,13 @@ __all__ = [
     "IMAGE_SCAN_RISK_TYPE_EROTIC",
     "IMAGE_SCAN_RISK_TYPE_POLITY",
     "IMAGE_SCAN_RISK_TYPE_VIOLENT",
+    "TEXT_SCAN_AREA_TYPE_ALL",
+    "TEXT_SCAN_AREA_TYPE_DOMESTIC",
+    "TEXT_SCAN_AREA_TYPE_FOREIGN",
+    "TEXT_SCAN_WAY_CHARACTER",
+    "TEXT_SCAN_WAY_DICTIONARY",
+    "TEXT_SCAN_WAY_MIXED",
+    "TEXT_SCAN_WAY_MODEL",
     "ImageURL",
     "ImageScanFrameResult",
     "ImageScanLabel",
@@ -210,8 +243,20 @@ __all__ = [
     "TaskBuilder",
     "TaskCreateRequest",
     "TaskMetadata",
+    "TextScanAreaType",
+    "TextScanAreaTypeAll",
+    "TextScanAreaTypeDomestic",
+    "TextScanAreaTypeForeign",
+    "TextScanData",
     "TextScanRequest",
     "TextScanResponse",
+    "TextScanSensitiveWord",
+    "TextScanStatus",
+    "TextScanWay",
+    "TextScanWayCharacter",
+    "TextScanWayDictionary",
+    "TextScanWayMixed",
+    "TextScanWayModel",
     "Text",
     "Usage",
     "User",

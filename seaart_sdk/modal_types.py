@@ -20,6 +20,13 @@ RiskType = str
 """Image scan risk category value used in request risk_types and response risk_types."""
 
 
+TextScanAreaType = int
+"""Text scan regional rule-set selector used in request area_types."""
+
+TextScanWay = int
+"""Text scan checking strategy value used in request way."""
+
+
 # Political or public-safety sensitive content.
 IMAGE_SCAN_RISK_TYPE_POLITY = "POLITY"
 # Erotic, pornographic, nudity, or sexually suggestive content.
@@ -28,6 +35,22 @@ IMAGE_SCAN_RISK_TYPE_EROTIC = "EROTIC"
 IMAGE_SCAN_RISK_TYPE_VIOLENT = "VIOLENT"
 # Child-safety risks, especially sexualized or unsafe child-related content.
 IMAGE_SCAN_RISK_TYPE_CHILD = "CHILD"
+
+# Check both domestic and foreign regional sensitive-word rule sets.
+TEXT_SCAN_AREA_TYPE_ALL = 0
+# Check the domestic regional sensitive-word rule set.
+TEXT_SCAN_AREA_TYPE_DOMESTIC = 1
+# Check the foreign regional sensitive-word rule set.
+TEXT_SCAN_AREA_TYPE_FOREIGN = 2
+
+# Use dictionary matching. This is the upstream default.
+TEXT_SCAN_WAY_DICTIONARY = 0
+# Use the big-data model checker.
+TEXT_SCAN_WAY_MODEL = 1
+# Use both dictionary and model checks.
+TEXT_SCAN_WAY_MIXED = 2
+# Use the digital-human checker.
+TEXT_SCAN_WAY_CHARACTER = 3
 
 
 @dataclass(slots=True)
@@ -163,16 +186,20 @@ class TextScanRequest:
 
     Attributes:
         text: Prompt or text content to scan for sensitive words.
-        scene: Upstream moderation scenario.
-        area_types: Upstream area categories to detect.
-        way: Upstream matching mode.
-        scenes: Additional upstream scene names.
+        scene: Upstream moderation scenario, for example 1 for search sensitive
+            words and 2 for prompt sensitive words.
+        area_types: Regional rule sets to check. 0 checks both domestic and
+            foreign rules, 1 checks domestic rules, and 2 checks foreign rules.
+        way: Checking strategy. 0 uses dictionary matching, 1 uses the big-data
+            model checker, 2 uses mixed checks, and 3 uses the digital-human checker.
+        scenes: Currently unused by the upstream service. When provided, it
+            overrides scene.
     """
 
     text: str
     scene: int = 0
-    area_types: list[int] = field(default_factory=list)
-    way: int = 0
+    area_types: list[TextScanAreaType] = field(default_factory=list)
+    way: TextScanWay = 0
     scenes: list[str] = field(default_factory=list)
 
     def raw(self) -> dict[str, Any]:
@@ -182,22 +209,55 @@ class TextScanRequest:
         }
         if self.area_types:
             body["area_types"] = self.area_types
-        if self.way:
-            body["way"] = self.way
+        body["way"] = self.way
         if self.scenes:
             body["scenes"] = self.scenes
         return body
 
 
 @dataclass(slots=True)
+class TextScanSensitiveWord:
+    """One sensitive-word match returned by POST /v1/text/scan.
+
+    Attributes:
+        word: Matched sensitive word.
+        start_index: Rune-array start index of the matched word.
+        end_index: Rune-array end index of the matched word.
+        risk_type_code: Upstream risk category, for example political,
+            violence, or porn.
+    """
+
+    word: str = ""
+    start_index: int = 0
+    end_index: int = 0
+    risk_type_code: str = ""
+
+
+@dataclass(slots=True)
+class TextScanData:
+    """Text moderation results returned by POST /v1/text/scan."""
+
+    sensitive_words: list[TextScanSensitiveWord] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class TextScanStatus:
+    """Upstream business status returned by POST /v1/text/scan."""
+
+    code: int = 0
+    msg: str = ""
+    request_id: str = ""
+
+
+@dataclass(slots=True)
 class TextScanResponse:
     """Parsed response returned by POST /v1/text/scan.
 
-    The upstream sensitive-word service owns most response fields, so extra
-    keeps provider-specific fields available while usage is decoded for gateway
-    billing.
+    Extra keeps upstream response fields that are not modeled by the SDK yet.
     """
 
+    data: TextScanData | None = None
+    status: TextScanStatus | None = None
     usage: Usage | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 

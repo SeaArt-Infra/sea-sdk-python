@@ -202,17 +202,17 @@ result = client.modal.scan_text(
     sa.TextScanRequest(
         text="prompt to check",
         scene=1,
-        area_types=[1, 2],
-        way=2,
-        scenes=["prompt"],
+        area_types=[sa.TextScanAreaTypeForeign],
+        way=sa.TextScanWayDictionary,
     )
 )
 
 print(result.usage)
-print(result.extra.get("result"))
+print(result.status.code, result.status.msg)
+print(result.data.sensitive_words)
 ```
 
-上游敏感词检测返回结构会保留在 `result.extra`，网关注入的计费信息在 `result.usage`。
+`area_types` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `start_index` / `end_index` 基于 rune 数组，网关注入的计费信息在 `result.usage`。
 
 人脸检测：
 
