@@ -209,10 +209,12 @@ result = client.modal.scan_text(
 
 print(result.usage)
 print(result.status.code, result.status.msg)
+print(result.data.is_sensitive)
 print(result.data.sensitive_words)
+print(result.data.combination)
 ```
 
-`area_types` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `start_index` / `end_index` 基于 rune 数组，网关注入的计费信息在 `result.usage`。
+`area_types` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `start_index` / `end_index` 基于 rune 数组；`is_sensitive` 表示整体是否命中敏感内容，`combination` 保留组合规则命中详情，网关注入的计费信息在 `result.usage`。
 
 人脸检测：
 

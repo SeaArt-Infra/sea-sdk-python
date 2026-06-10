@@ -350,7 +350,9 @@ class ModalServiceTests(unittest.TestCase):
                                 "end_index": 8,
                                 "risk_type_code": "political",
                             }
-                        ]
+                        ],
+                        "combination": {"rule": "pair"},
+                        "is_sensitive": True,
                     },
                     "status": {
                         "code": 10000,
@@ -383,9 +385,47 @@ class ModalServiceTests(unittest.TestCase):
         self.assertEqual(word.start_index, 2)
         self.assertEqual(word.end_index, 8)
         self.assertEqual(word.risk_type_code, "political")
+        self.assertEqual(response.data.combination, {"rule": "pair"})
+        self.assertTrue(response.data.is_sensitive)
         self.assertIsNotNone(response.usage)
         self.assertEqual(response.usage.cost, "0.003")
         self.assertEqual(response.extra, {})
+
+    def test_scan_text_preserves_empty_result_fields(self) -> None:
+        def handler(request):
+            self.assertEqual(request_path(request), "/v1/text/scan")
+            return json_response(
+                200,
+                {
+                    "data": {
+                        "sensitive_words": [],
+                        "combination": None,
+                        "is_sensitive": False,
+                    },
+                    "status": {
+                        "code": 10000,
+                        "msg": "success",
+                        "request_id": "risk-empty",
+                    },
+                    "usage": {"cost": "1"},
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_text(
+                TextScanRequest(
+                    text="clean prompt",
+                    scene=1,
+                    area_types=[TextScanAreaTypeForeign],
+                    way=TextScanWayDictionary,
+                )
+            )
+
+        self.assertIsNotNone(response.data)
+        self.assertEqual(response.data.sensitive_words, [])
+        self.assertIsNone(response.data.combination)
+        self.assertFalse(response.data.is_sensitive)
 
     def test_scan_text_accepts_raw_dict(self) -> None:
         def handler(request):

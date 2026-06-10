@@ -235,9 +235,17 @@ class TextScanSensitiveWord:
 
 @dataclass(slots=True)
 class TextScanData:
-    """Text moderation results returned by POST /v1/text/scan."""
+    """Text moderation results returned by POST /v1/text/scan.
+
+    Attributes:
+        sensitive_words: Every sensitive word matched by the service.
+        combination: Upstream combination-rule details when a match is produced.
+        is_sensitive: Whether the scanned text matched sensitive content.
+    """
 
     sensitive_words: list[TextScanSensitiveWord] = field(default_factory=list)
+    combination: Any = None
+    is_sensitive: bool = False
 
 
 @dataclass(slots=True)
