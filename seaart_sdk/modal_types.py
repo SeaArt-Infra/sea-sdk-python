@@ -413,20 +413,37 @@ class InputItem:
 class TaskCreateRequest:
     model: str
     input: list[InputItem] = field(default_factory=list)
+    params: dict[str, Any] = field(default_factory=dict)
+    params_input: Any = None
     parameters: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
     options: dict[str, Any] = field(default_factory=dict)
+    moderation: bool | None = None
+    extra_top_level: dict[str, Any] = field(default_factory=dict)
 
     def raw(self) -> dict[str, Any]:
         body: dict[str, Any] = {"model": self.model}
-        if self.input:
-            body["input"] = [_raw_input(item) for item in self.input]
+        if self.moderation is not None:
+            body["moderation"] = self.moderation
+        params = dict(self.params)
+        if self.params_input is not None:
+            params["input"] = self.params_input
+        elif self.input and "input" not in params:
+            params["input"] = [_raw_input(item) for item in self.input]
         if self.parameters:
-            body["parameters"] = self.parameters
+            existing_parameters = params.get("parameters")
+            if isinstance(existing_parameters, dict):
+                params["parameters"] = {**existing_parameters, **self.parameters}
+            else:
+                params["parameters"] = self.parameters
+        if params:
+            body["input"] = [{"params": params}]
         if self.metadata:
             body["metadata"] = self.metadata
         if self.options:
             body["options"] = self.options
+        if self.extra_top_level:
+            body.update(self.extra_top_level)
         return body
 
 
@@ -481,6 +498,14 @@ class TaskBuilder:
         self.request.input.append(user(*parts))
         return self
 
+    def params_input(self, value: Any) -> "TaskBuilder":
+        self.request.params_input = value
+        return self
+
+    def params(self, value: dict[str, Any]) -> "TaskBuilder":
+        self.request.params = dict(value)
+        return self
+
     def param(self, key: str, value: Any) -> "TaskBuilder":
         self.request.parameters[key] = value
         return self
@@ -494,6 +519,14 @@ class TaskBuilder:
 
     def option(self, key: str, value: Any) -> "TaskBuilder":
         self.request.options[key] = value
+        return self
+
+    def moderation(self, value: bool) -> "TaskBuilder":
+        self.request.moderation = value
+        return self
+
+    def field(self, key: str, value: Any) -> "TaskBuilder":
+        self.request.extra_top_level[key] = value
         return self
 
     def build(self) -> dict[str, Any]:

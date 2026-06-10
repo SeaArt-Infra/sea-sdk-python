@@ -17,7 +17,7 @@ tags:
 **处理逻辑：**
 
 1. 根据用户需求判断使用 Modal API（统一多模态任务）、Passthrough API（厂商原始接口）还是 LLM API（文本生成）
-2. 优先推荐 Builder 方式（`sa.NewTask(...).user(...).param(...).build()`）创建 Modal 任务
+2. 优先推荐直接使用 `input[*].params` 结构；如需类型化构造，可使用 `sa.NewTask(...).moderation(...).params({...}).build()`
 3. LLM 接口返回 `bytes`，提醒用户用 `sa.Decode(raw, Type)` 反序列化
 4. 流式接口推荐配合 `MessagesStreamTextAssembler` / `ResponsesStreamTextAssembler` 使用
 5. 错误处理建议捕获 `SeaArtError` 并按 `kind` 属性分类（ERR_AUTH/ERR_QUOTA/ERR_TIMEOUT/ERR_TASK_FAILED）
@@ -64,17 +64,51 @@ client = sa.Client(
 
 ## Modal API（多模态任务）
 
-### 创建任务（Builder 方式，推荐）
+### 创建任务
+
+```python
+task = client.modal.create({
+    "moderation": True,
+    "model": "alibaba_wanx26_i2v_flash",
+    "input": [{
+        "params": {
+            "input": {
+                "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                "prompt": "小狗和女孩在秋天的公园里快乐地玩耍"
+            },
+            "parameters": {
+                "resolution": "720P",
+                "duration": 5,
+                "prompt_extend": True,
+                "watermark": False
+            },
+        }
+    }],
+})
+```
+
+`moderation` 为布尔类型，非必传；`True` 表示开白，`False` 表示非开白。
+
+### 创建任务（Typed helper）
 
 ```python
 body = (
-    sa.NewTask("vidu_q3_reference")
-    .user(
-        sa.Text("cinematic shot"),
-        sa.ImageURL("https://example.com/ref1.webp"),
-        sa.ImageURL("https://example.com/ref2.webp"),
+    sa.NewTask("alibaba_wanx26_i2v_flash")
+    .moderation(True)
+    .params(
+        {
+            "input": {
+                "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+            },
+            "parameters": {
+                "resolution": "720P",
+                "duration": 5,
+                "prompt_extend": True,
+                "watermark": False,
+            },
+        }
     )
-    .param("duration", 5)
     .metadata("trace_id", "trace-123")
     .build()
 )
@@ -82,22 +116,27 @@ body = (
 task = client.modal.create(body)
 ```
 
-### 创建任务（原始方式）
+有些模型会直接把模型字段平铺在 `params` 下，而不是拆成 `input` / `parameters`：
 
 ```python
-task = client.modal.create({
-    "model": "vidu_q3_reference",
-    "input": [{
-        "type": "message",
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "cinematic shot"},
-            {"type": "image_url", "url": "https://example.com/ref.webp"},
-        ],
-    }],
-    "parameters": {"duration": 5},
-})
+body = (
+    sa.NewTask("grok_imagine_image")
+    .field("dash_scope", True)
+    .moderation(True)
+    .params(
+        {
+            "aspect_ratio": "1:2",
+            "prompt": "Lego art version of Superman and Batman，Night scene",
+            "n": 1,
+            "resolution": "1k",
+        }
+    )
+    .build()
+)
+
+task = client.modal.create(body)
 ```
+
 
 ### 内容类型构造器
 
@@ -354,13 +393,26 @@ import seaart_sdk as sa
 client = sa.Client(sa.ClientConfig(api_key="sa-your-api-key"))
 
 task = client.modal.create(
-    sa.NewTask("vidu_q3_reference")
-    .user(
-        sa.Text("一只猫在月光下奔跑，电影级画面"),
-        sa.ImageURL("https://example.com/cat.jpg"),
-    )
-    .param("duration", 5)
-    .build()
+    {
+        "moderation": True,
+        "model": "alibaba_wanx26_i2v_flash",
+        "input": [
+            {
+                "params": {
+                    "input": {
+                        "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                        "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                    },
+                    "parameters": {
+                        "resolution": "720P",
+                        "duration": 5,
+                        "prompt_extend": True,
+                        "watermark": False,
+                    },
+                }
+            }
+        ],
+    }
 )
 
 print(f"任务已创建: {task.id}")

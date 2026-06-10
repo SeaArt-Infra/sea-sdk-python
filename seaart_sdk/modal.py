@@ -36,7 +36,12 @@ class ModalService:
 
     def create(self, body: dict[str, object], *options: RequestOption) -> Task:
         request_options = build_request_options(options)
-        status, payload = self._client.request("POST", "/v1/generation", body, request_options.headers)
+        status, payload = self._client.request(
+            "POST",
+            "/v1/generation",
+            body,
+            request_options.headers,
+        )
         if status >= 400:
             raise _http_error(status, payload)
 

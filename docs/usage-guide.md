@@ -47,17 +47,53 @@ client = sa.Client(
 
 ## Modal API（多模态任务）
 
-### 创建任务（Builder 方式，推荐）
+### 创建任务
+
+```python
+task = client.modal.create({
+    "moderation": True,
+    "model": "alibaba_wanx26_i2v_flash",
+    "input": [
+        {
+            "params": {
+                "input": {
+                    "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                    "prompt": "小狗和女孩在秋天的公园里快乐地玩耍"
+                },
+                "parameters": {
+                    "resolution": "720P",
+                    "duration": 5,
+                    "prompt_extend": True,
+                    "watermark": False
+                }
+            },
+        }
+    ],
+})
+```
+
+`moderation` 为布尔类型，非必传；`True` 表示开白，`False` 表示非开白。
+
+### 创建任务（Typed helper）
 
 ```python
 body = (
-    sa.NewTask("vidu_q3_reference")
-    .user(
-        sa.Text("cinematic shot"),
-        sa.ImageURL("https://example.com/ref1.webp"),
-        sa.ImageURL("https://example.com/ref2.webp"),
+    sa.NewTask("alibaba_wanx26_i2v_flash")
+    .moderation(True)
+    .params(
+        {
+            "input": {
+                "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+            },
+            "parameters": {
+                "resolution": "720P",
+                "duration": 5,
+                "prompt_extend": True,
+                "watermark": False,
+            },
+        }
     )
-    .param("duration", 5)
     .metadata("trace_id", "trace-123")
     .build()
 )
@@ -65,24 +101,27 @@ body = (
 task = client.modal.create(body)
 ```
 
-### 创建任务（原始方式）
+不同模型的 `params` 结构可能不同。有些模型使用 `input` / `parameters` 两层嵌套，也有些模型直接把模型字段平铺在 `params` 下，例如：
 
 ```python
-task = client.modal.create({
-    "model": "vidu_q3_reference",
-    "input": [
+body = (
+    sa.NewTask("grok_imagine_image")
+    .field("dash_scope", True)
+    .moderation(True)
+    .params(
         {
-            "type": "message",
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "cinematic shot"},
-                {"type": "image_url", "url": "https://example.com/ref.webp"},
-            ],
+            "aspect_ratio": "1:2",
+            "prompt": "Lego art version of Superman and Batman，Night scene",
+            "n": 1,
+            "resolution": "1k",
         }
-    ],
-    "parameters": {"duration": 5},
-})
+    )
+    .build()
+)
+
+task = client.modal.create(body)
 ```
+
 
 ### 内容类型构造器
 
@@ -433,13 +472,26 @@ client = sa.Client(sa.ClientConfig(api_key="sa-your-api-key"))
 
 # 创建任务
 task = client.modal.create(
-    sa.NewTask("vidu_q3_reference")
-    .user(
-        sa.Text("一只猫在月光下奔跑，电影级画面"),
-        sa.ImageURL("https://example.com/cat.jpg"),
-    )
-    .param("duration", 5)
-    .build()
+    {
+        "moderation": True,
+        "model": "alibaba_wanx26_i2v_flash",
+        "input": [
+            {
+                "params": {
+                    "input": {
+                        "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                        "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                    },
+                    "parameters": {
+                        "resolution": "720P",
+                        "duration": 5,
+                        "prompt_extend": True,
+                        "watermark": False,
+                    },
+                }
+            }
+        ],
+    }
 )
 
 print(f"任务已创建: {task.id}")

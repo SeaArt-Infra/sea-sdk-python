@@ -67,25 +67,32 @@ client = sa.Client(
 ```python
 task = client.modal.create(
     {
-        "model": "vidu_q3_reference",
+        "moderation": True,
+        "model": "alibaba_wanx26_i2v_flash",
         "input": [
             {
-                "type": "message",
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "cinematic shot"},
-                    {"type": "image_url", "url": "https://example.com/ref1.webp"},
-                    {"type": "image_url", "url": "https://example.com/ref2.webp"},
-                ],
+                "params": {
+                    "input": {
+                        "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                        "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                    },
+                    "parameters": {
+                        "resolution": "720P",
+                        "duration": 5,
+                        "prompt_extend": True,
+                        "watermark": False,
+                    },
+                }
             }
         ],
-        "parameters": {"duration": 5},
     },
     sa.WithHeader("X-Trace-Id", "trace-123"),
 )
 
 print(task.id, task.status)
 ```
+
+`moderation` 为布尔类型，非必传；`True` 表示开白，`False` 表示非开白。
 
 等待任务完成：
 
@@ -102,27 +109,58 @@ print(task.status, task.progress, task.urls())
 也可以在创建后继续等待：
 
 ```python
-task = client.modal.create({"model": "vidu_q3_reference"})
-task = task.wait(sa.WithPollInterval(3.0))
+task = client.modal.create({"model": "alibaba_wanx26_i2v_flash"})
+task = task.wait(sa.WithPollInterval(5.0))
 ```
 
 Typed helper：
 
 ```python
 body = (
-    sa.NewTask("vidu_q3_reference")
-    .user(
-        sa.Text("cinematic shot"),
-        sa.ImageURL("https://example.com/ref1.webp"),
-        sa.ImageURL("https://example.com/ref2.webp"),
+    sa.NewTask("alibaba_wanx26_i2v_flash")
+    .moderation(True)
+    .params(
+        {
+            "input": {
+                "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+            },
+            "parameters": {
+                "resolution": "720P",
+                "duration": 5,
+                "prompt_extend": True,
+                "watermark": False,
+            },
+        }
     )
-    .param("duration", 5)
     .metadata("trace_id", "trace-123")
     .build()
 )
 
 task = client.modal.create(body)
 ```
+
+也有些模型会直接把模型字段平铺在 `params` 下：
+
+```python
+body = (
+    sa.NewTask("grok_imagine_image")
+    .field("dash_scope", True)
+    .moderation(True)
+    .params(
+        {
+            "aspect_ratio": "1:2",
+            "prompt": "Lego art version of Superman and Batman，Night scene",
+            "n": 1,
+            "resolution": "1k",
+        }
+    )
+    .build()
+)
+
+task = client.modal.create(body)
+```
+
 
 模型列表和参数详情：
 

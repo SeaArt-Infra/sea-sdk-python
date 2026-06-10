@@ -32,35 +32,46 @@ class ModalServiceTests(unittest.TestCase):
             self.assertEqual(request_path(request), "/v1/generation")
             self.assertEqual(request_headers(request)["X-trace-id"], "trace-123")
             body = request_json(request)
-            self.assertEqual(body["model"], "vidu_q3_reference")
-            self.assertEqual(body["parameters"]["duration"], 5)
+            self.assertTrue(body["moderation"])
+            self.assertEqual(body["model"], "alibaba_wanx26_i2v_flash")
+            self.assertEqual(
+                body["input"][0]["params"]["input"]["img_url"],
+                "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+            )
+            self.assertEqual(body["input"][0]["params"]["parameters"]["duration"], 5)
             return json_response(
                 200,
-                {"id": "task_create", "status": "in_progress", "model": "vidu_q3_reference"},
+                {"id": "task_create", "status": "in_progress", "model": "alibaba_wanx26_i2v_flash"},
             )
 
         client = make_client()
         with patch_urlopen(handler):
             task = client.modal.create(
                 {
-                    "model": "vidu_q3_reference",
+                    "moderation": True,
+                    "model": "alibaba_wanx26_i2v_flash",
                     "input": [
                         {
-                            "type": "message",
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "cinematic shot"},
-                                {"type": "image_url", "url": "https://example.com/ref1.webp"},
-                            ],
+                            "params": {
+                                "input": {
+                                    "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                                    "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                                },
+                                "parameters": {
+                                    "resolution": "720P",
+                                    "duration": 5,
+                                    "prompt_extend": True,
+                                    "watermark": False,
+                                },
+                            },
                         }
                     ],
-                    "parameters": {"duration": 5},
                 },
                 WithHeader("X-Trace-Id", "trace-123"),
             )
         self.assertEqual(task.id, "task_create")
         self.assertEqual(task.status, "in_progress")
-        self.assertEqual(task.model, "vidu_q3_reference")
+        self.assertEqual(task.model, "alibaba_wanx26_i2v_flash")
 
     def test_get_returns_task(self) -> None:
         def handler(request):
@@ -544,17 +555,61 @@ class ModalServiceTests(unittest.TestCase):
 
     def test_task_builder_builds_generic_request(self) -> None:
         body = (
-            NewTask("vidu_q3_reference")
-            .user(
-                Text("cinematic shot"),
-                ImageURL("https://example.com/ref1.webp"),
+            NewTask("alibaba_wanx26_i2v_flash")
+            .moderation(True)
+            .params(
+                {
+                    "input": {
+                        "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                        "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                    },
+                    "parameters": {
+                        "resolution": "720P",
+                        "duration": 5,
+                        "prompt_extend": True,
+                        "watermark": False,
+                    },
+                }
             )
-            .param("duration", 5)
             .metadata_item("trace_id", "trace-123")
             .build()
         )
-        self.assertEqual(body["model"], "vidu_q3_reference")
+        self.assertTrue(body["moderation"])
+        self.assertEqual(body["model"], "alibaba_wanx26_i2v_flash")
+        self.assertEqual(
+            body["input"][0]["params"]["input"]["img_url"],
+            "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+        )
+        self.assertEqual(body["input"][0]["params"]["parameters"]["resolution"], "720P")
+        self.assertEqual(body["input"][0]["params"]["parameters"]["duration"], 5)
         self.assertEqual(body["metadata"]["trace_id"], "trace-123")
+
+    def test_task_builder_supports_flat_params_and_top_level_fields(self) -> None:
+        body = (
+            NewTask("grok_imagine_image")
+            .field("dash_scope", True)
+            .moderation(True)
+            .params(
+                {
+                    "aspect_ratio": "1:2",
+                    "prompt": "Lego art version of Superman and Batman，Night scene",
+                    "n": 1,
+                    "resolution": "1k",
+                }
+            )
+            .build()
+        )
+
+        self.assertTrue(body["dash_scope"])
+        self.assertTrue(body["moderation"])
+        self.assertEqual(body["model"], "grok_imagine_image")
+        self.assertEqual(body["input"][0]["params"]["aspect_ratio"], "1:2")
+        self.assertEqual(
+            body["input"][0]["params"]["prompt"],
+            "Lego art version of Superman and Batman，Night scene",
+        )
+        self.assertEqual(body["input"][0]["params"]["n"], 1)
+        self.assertEqual(body["input"][0]["params"]["resolution"], "1k")
 
 
 if __name__ == "__main__":
