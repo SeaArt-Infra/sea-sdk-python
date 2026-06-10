@@ -20,8 +20,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/SeaVerseAI/sea-sdk-python"
-Repository = "https://github.com/SeaVerseAI/sea-sdk-python"
+Homepage = "https://github.com/SeaArt-Infra/sea-sdk-python"
+Repository = "https://github.com/SeaArt-Infra/sea-sdk-python"
 
 [tool.setuptools.packages.find]
 include = ["seaart_sdk*"]
