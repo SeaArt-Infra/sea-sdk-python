@@ -696,6 +696,32 @@ class ModalServiceTests(unittest.TestCase):
         self.assertEqual(body["input"][0]["params"]["n"], 1)
         self.assertEqual(body["input"][0]["params"]["resolution"], "1k")
 
+    def test_task_builder_merges_params_input_with_user_input(self) -> None:
+        body = (
+            NewTask("mixed_model")
+            .params({"input": [{"type": "system", "text": "keep existing input"}]})
+            .user(
+                Text("cinematic shot"),
+                ImageURL("https://example.com/ref1.webp"),
+            )
+            .param("duration", 5)
+            .build()
+        )
+
+        params = body["input"][0]["params"]
+        self.assertEqual(params["input"][0], {"type": "system", "text": "keep existing input"})
+        self.assertEqual(params["input"][1]["type"], "message")
+        self.assertEqual(params["input"][1]["role"], "user")
+        self.assertEqual(params["input"][1]["content"][0]["text"], "cinematic shot")
+        self.assertEqual(params["parameters"]["duration"], 5)
+
+    def test_task_builder_wraps_scalar_params_input_before_user_input(self) -> None:
+        body = NewTask("mixed_model").params({"input": {"prompt": "A dog"}}).user(Text("cat")).build()
+
+        params_input = body["input"][0]["params"]["input"]
+        self.assertEqual(params_input[0], {"prompt": "A dog"})
+        self.assertEqual(params_input[1]["role"], "user")
+
 
 if __name__ == "__main__":
     unittest.main()

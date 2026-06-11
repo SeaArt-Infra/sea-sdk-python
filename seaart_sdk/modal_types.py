@@ -448,8 +448,15 @@ class TaskCreateRequest:
         params = dict(self.params)
         if self.params_input is not None:
             params["input"] = self.params_input
-        elif self.input and "input" not in params:
-            params["input"] = [_raw_input(item) for item in self.input]
+        elif self.input:
+            raw_input_items = [_raw_input(item) for item in self.input]
+            existing_input = params.get("input")
+            if existing_input is None:
+                params["input"] = raw_input_items
+            elif isinstance(existing_input, list):
+                params["input"] = [*existing_input, *raw_input_items]
+            else:
+                params["input"] = [existing_input, *raw_input_items]
         if self.parameters:
             existing_parameters = params.get("parameters")
             if isinstance(existing_parameters, dict):
