@@ -338,6 +338,26 @@ class GenerationResponse:
 
 
 @dataclass(slots=True)
+class PrechargeData:
+    billing_model: str = ""
+    cost: str | None = None
+    currency: str = ""
+    discount: float = 0.0
+    hash: str = ""
+    model: str = ""
+    original_model: str = ""
+    sample_count: int = 0
+    updated_at: int = 0
+    reason: str = ""
+
+
+@dataclass(slots=True)
+class PrechargeResponse:
+    data: PrechargeData | None = None
+    status: str = ""
+
+
+@dataclass(slots=True)
 class Task:
     id: str = ""
     status: str = ""

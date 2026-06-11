@@ -164,6 +164,104 @@ for url in task.urls():
 
 **Task 状态：** `"in_progress"` / `"completed"` / `"failed"`
 
+### 预扣费查询
+
+预扣费查询路由为 `/model/v1/generation/precharge`，请求参数与创建任务相同。
+
+```python
+resp = client.modal.precharge(
+    {
+        "id": "d88pmute87128c73e9r0d0",
+        "model": "volces_seedream_4_5",
+        "input": [
+            {
+                "params": {
+                    "prompt": "A dog",
+                }
+            }
+        ],
+        "moderation": False,
+    }
+)
+
+print(resp.status)
+print(resp.data.billing_model, resp.data.cost, resp.data.currency)
+```
+
+响应示例：
+
+```json
+{
+  "data": {
+    "billing_model": "volces_seedream_4_5",
+    "cost": "0.035714285714",
+    "currency": "USD",
+    "discount": 0.7,
+    "hash": "v1:18a733f04d227d572950ed8f1f98a9ba4cd37c168c5c98c05a5e574984f58eaf",
+    "model": "volces_seedream_4_5",
+    "original_model": "volces_seedream_4_5",
+    "sample_count": 4,
+    "updated_at": 1780633394064
+  },
+  "status": "success"
+}
+```
+
+字段说明：
+
+- `status`：查询状态，成功时为 `success`
+- `data.billing_model`：计费模型名
+- `data.cost`：预扣费金额
+- `data.currency`：币种
+- `data.discount`：折扣系数
+- `data.hash`：本次预扣费结果哈希
+- `data.model`：当前请求模型
+- `data.original_model`：原始模型名
+- `data.sample_count`：采样数量
+- `data.updated_at`：更新时间戳（毫秒）
+
+未匹配上预扣费数据时，可能返回：
+
+```json
+{
+  "data": {
+    "cost": null,
+    "hash": "v1:02833b68895eeb61bf214d35fd669502ef788e4c8d58505893414ae9632ca8ab",
+    "model": "volces_seedream_4_5",
+    "original_model": "volces_seedream_4_5",
+    "reason": "COST_CACHE_MISS"
+  },
+  "status": "failed"
+}
+```
+
+此时可重点关注：
+
+- `status`：这里会是 `failed`
+- `data.cost`：可能为 `null`
+- `data.reason`：失败原因，例如 `COST_CACHE_MISS`
+
+Typed helper：
+
+```python
+body = (
+    sa.NewTask("volces_seedream_4_5")
+    .moderation(False)
+    .field("id", "d88pmute87128c73e9r0d0")
+    .params(
+        {
+            "prompt": "A dog",
+        }
+    )
+    .build()
+)
+
+resp = client.modal.precharge(body)
+
+print(resp.status)
+print(resp.data.billing_model, resp.data.cost, resp.data.currency)
+```
+
 ### 图片/视频鉴黄
 
 使用 `client.modal.scan_image` 调用 `model_base_url + /v1/image/scan`。

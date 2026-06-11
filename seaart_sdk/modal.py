@@ -15,6 +15,7 @@ from .modal_types import (
     ImageScanResponse,
     ModelSearchParams,
     ModelSearchResponse,
+    PrechargeResponse,
     PollOption,
     Task,
     TextScanRequest,
@@ -55,6 +56,18 @@ class ModalService:
             error=response.error,
             _service=self,
         )
+
+    def precharge(self, body: dict[str, object], *options: RequestOption) -> PrechargeResponse:
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "POST",
+            "/v1/generation/precharge",
+            body,
+            request_options.headers,
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        return decode(payload, PrechargeResponse)
 
     def list_models(self, params: ModelSearchParams | None = None, *options: RequestOption) -> ModelSearchResponse:
         """Search multimodal model skills via GET /v1/models/skill/search.
