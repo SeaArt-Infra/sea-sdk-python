@@ -67,25 +67,32 @@ client = sa.Client(
 ```python
 task = client.modal.create(
     {
-        "model": "vidu_q3_reference",
+        "moderation": True,
+        "model": "alibaba_wanx26_i2v_flash",
         "input": [
             {
-                "type": "message",
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "cinematic shot"},
-                    {"type": "image_url", "url": "https://example.com/ref1.webp"},
-                    {"type": "image_url", "url": "https://example.com/ref2.webp"},
-                ],
+                "params": {
+                    "input": {
+                        "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                        "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                    },
+                    "parameters": {
+                        "resolution": "720P",
+                        "duration": 5,
+                        "prompt_extend": True,
+                        "watermark": False,
+                    },
+                }
             }
         ],
-        "parameters": {"duration": 5},
     },
     sa.WithHeader("X-Trace-Id", "trace-123"),
 )
 
 print(task.id, task.status)
 ```
+
+`moderation` 为布尔类型，非必传；`True` 表示开白，`False` 表示非开白。
 
 等待任务完成：
 
@@ -99,30 +106,157 @@ task = client.modal.wait(
 print(task.status, task.progress, task.urls())
 ```
 
+预扣费查询：
+
+```python
+resp = client.modal.precharge(
+    {
+        "id": "d88pmute87128c73e9r0d0",
+        "model": "volces_seedream_4_5",
+        "input": [
+            {
+                "params": {
+                    "prompt": "A dog",
+                }
+            }
+        ],
+        "moderation": False,
+    }
+)
+
+print(resp.status)
+print(resp.data.billing_model, resp.data.cost, resp.data.currency)
+```
+
+响应示例：
+
+```json
+{
+  "data": {
+    "billing_model": "volces_seedream_4_5",
+    "cost": "0.035714285714",
+    "currency": "USD",
+    "discount": 0.7,
+    "hash": "v1:18a733f04d227d572950ed8f1f98a9ba4cd37c168c5c98c05a5e574984f58eaf",
+    "model": "volces_seedream_4_5",
+    "original_model": "volces_seedream_4_5",
+    "sample_count": 4,
+    "updated_at": 1780633394064
+  },
+  "status": "success"
+}
+```
+
+字段说明：
+
+- `status`：查询状态，成功时为 `success`
+- `data.billing_model`：计费模型名
+- `data.cost`：预扣费金额
+- `data.currency`：币种
+- `data.discount`：折扣系数
+- `data.hash`：本次预扣费结果哈希
+- `data.model`：当前请求模型
+- `data.original_model`：原始模型名
+- `data.sample_count`：采样数量
+- `data.updated_at`：更新时间戳（毫秒）
+
+未匹配上预扣费数据时，可能返回：
+
+```json
+{
+  "data": {
+    "cost": null,
+    "hash": "v1:02833b68895eeb61bf214d35fd669502ef788e4c8d58505893414ae9632ca8ab",
+    "model": "volces_seedream_4_5",
+    "original_model": "volces_seedream_4_5",
+    "reason": "COST_CACHE_MISS"
+  },
+  "status": "failed"
+}
+```
+
+此时可重点关注：
+
+- `status`：这里会是 `failed`
+- `data.cost`：可能为 `null`
+- `data.reason`：失败原因，例如 `COST_CACHE_MISS`
+
+Typed helper：
+
+```python
+body = (
+    sa.NewTask("volces_seedream_4_5")
+    .moderation(False)
+    .field("id", "d88pmute87128c73e9r0d0")
+    .params(
+        {
+            "prompt": "A dog",
+        }
+    )
+    .build()
+)
+
+resp = client.modal.precharge(body)
+
+print(resp.status)
+print(resp.data.billing_model, resp.data.cost, resp.data.currency)
+```
+
 也可以在创建后继续等待：
 
 ```python
-task = client.modal.create({"model": "vidu_q3_reference"})
-task = task.wait(sa.WithPollInterval(3.0))
+task = client.modal.create({"model": "alibaba_wanx26_i2v_flash"})
+task = task.wait(sa.WithPollInterval(5.0))
 ```
 
 Typed helper：
 
 ```python
 body = (
-    sa.NewTask("vidu_q3_reference")
-    .user(
-        sa.Text("cinematic shot"),
-        sa.ImageURL("https://example.com/ref1.webp"),
-        sa.ImageURL("https://example.com/ref2.webp"),
+    sa.NewTask("alibaba_wanx26_i2v_flash")
+    .moderation(True)
+    .params(
+        {
+            "input": {
+                "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+            },
+            "parameters": {
+                "resolution": "720P",
+                "duration": 5,
+                "prompt_extend": True,
+                "watermark": False,
+            },
+        }
     )
-    .param("duration", 5)
     .metadata("trace_id", "trace-123")
     .build()
 )
 
 task = client.modal.create(body)
 ```
+
+也有些模型会直接把模型字段平铺在 `params` 下：
+
+```python
+body = (
+    sa.NewTask("grok_imagine_image")
+    .field("dash_scope", True)
+    .moderation(True)
+    .params(
+        {
+            "aspect_ratio": "1:2",
+            "prompt": "Lego art version of Superman and Batman，Night scene",
+            "n": 1,
+            "resolution": "1k",
+        }
+    )
+    .build()
+)
+
+task = client.modal.create(body)
+```
+
 
 模型列表和参数详情：
 

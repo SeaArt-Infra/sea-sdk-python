@@ -338,6 +338,26 @@ class GenerationResponse:
 
 
 @dataclass(slots=True)
+class PrechargeData:
+    billing_model: str = ""
+    cost: str | None = None
+    currency: str = ""
+    discount: float = 0.0
+    hash: str = ""
+    model: str = ""
+    original_model: str = ""
+    sample_count: int = 0
+    updated_at: int = 0
+    reason: str = ""
+
+
+@dataclass(slots=True)
+class PrechargeResponse:
+    data: PrechargeData | None = None
+    status: str = ""
+
+
+@dataclass(slots=True)
 class Task:
     id: str = ""
     status: str = ""
@@ -412,21 +432,32 @@ class InputItem:
 @dataclass(slots=True)
 class TaskCreateRequest:
     model: str
-    input: list[InputItem] = field(default_factory=list)
+    params: dict[str, Any] = field(default_factory=dict)
     parameters: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
     options: dict[str, Any] = field(default_factory=dict)
+    moderation: bool | None = None
+    extra_top_level: dict[str, Any] = field(default_factory=dict)
 
     def raw(self) -> dict[str, Any]:
         body: dict[str, Any] = {"model": self.model}
-        if self.input:
-            body["input"] = [_raw_input(item) for item in self.input]
+        if self.moderation is not None:
+            body["moderation"] = self.moderation
+        params = dict(self.params)
         if self.parameters:
-            body["parameters"] = self.parameters
+            existing_parameters = params.get("parameters")
+            if isinstance(existing_parameters, dict):
+                params["parameters"] = {**existing_parameters, **self.parameters}
+            else:
+                params["parameters"] = self.parameters
+        if params:
+            body["input"] = [{"params": params}]
         if self.metadata:
             body["metadata"] = self.metadata
         if self.options:
             body["options"] = self.options
+        if self.extra_top_level:
+            body.update(self.extra_top_level)
         return body
 
 
@@ -470,15 +501,8 @@ def _raw_part(part: ContentPart) -> dict[str, Any]:
 class TaskBuilder:
     request: TaskCreateRequest
 
-    def input(self, item: InputItem) -> "TaskBuilder":
-        return self.input_item(item)
-
-    def input_item(self, item: InputItem) -> "TaskBuilder":
-        self.request.input.append(item)
-        return self
-
-    def user(self, *parts: ContentPart) -> "TaskBuilder":
-        self.request.input.append(user(*parts))
+    def params(self, value: dict[str, Any]) -> "TaskBuilder":
+        self.request.params = dict(value)
         return self
 
     def param(self, key: str, value: Any) -> "TaskBuilder":
@@ -494,6 +518,14 @@ class TaskBuilder:
 
     def option(self, key: str, value: Any) -> "TaskBuilder":
         self.request.options[key] = value
+        return self
+
+    def moderation(self, value: bool) -> "TaskBuilder":
+        self.request.moderation = value
+        return self
+
+    def field(self, key: str, value: Any) -> "TaskBuilder":
+        self.request.extra_top_level[key] = value
         return self
 
     def build(self) -> dict[str, Any]:
@@ -529,10 +561,6 @@ def audio_url(url: str) -> ContentPart:
 
 def file_id(value: str) -> ContentPart:
     return ContentPart(type="file_id", file_id=value)
-
-
-def user(*parts: ContentPart) -> InputItem:
-    return InputItem(type="message", role="user", content=list(parts))
 
 
 @dataclass(slots=True)

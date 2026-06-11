@@ -47,17 +47,53 @@ client = sa.Client(
 
 ## Modal API（多模态任务）
 
-### 创建任务（Builder 方式，推荐）
+### 创建任务
+
+```python
+task = client.modal.create({
+    "moderation": True,
+    "model": "alibaba_wanx26_i2v_flash",
+    "input": [
+        {
+            "params": {
+                "input": {
+                    "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                    "prompt": "小狗和女孩在秋天的公园里快乐地玩耍"
+                },
+                "parameters": {
+                    "resolution": "720P",
+                    "duration": 5,
+                    "prompt_extend": True,
+                    "watermark": False
+                }
+            },
+        }
+    ],
+})
+```
+
+`moderation` 为布尔类型，非必传；`True` 表示开白，`False` 表示非开白。
+
+### 创建任务（Typed helper）
 
 ```python
 body = (
-    sa.NewTask("vidu_q3_reference")
-    .user(
-        sa.Text("cinematic shot"),
-        sa.ImageURL("https://example.com/ref1.webp"),
-        sa.ImageURL("https://example.com/ref2.webp"),
+    sa.NewTask("alibaba_wanx26_i2v_flash")
+    .moderation(True)
+    .params(
+        {
+            "input": {
+                "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+            },
+            "parameters": {
+                "resolution": "720P",
+                "duration": 5,
+                "prompt_extend": True,
+                "watermark": False,
+            },
+        }
     )
-    .param("duration", 5)
     .metadata("trace_id", "trace-123")
     .build()
 )
@@ -65,34 +101,26 @@ body = (
 task = client.modal.create(body)
 ```
 
-### 创建任务（原始方式）
+不同模型的 `params` 结构可能不同。有些模型使用 `input` / `parameters` 两层嵌套，也有些模型直接把模型字段平铺在 `params` 下，例如：
 
 ```python
-task = client.modal.create({
-    "model": "vidu_q3_reference",
-    "input": [
+body = (
+    sa.NewTask("grok_imagine_image")
+    .field("dash_scope", True)
+    .moderation(True)
+    .params(
         {
-            "type": "message",
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "cinematic shot"},
-                {"type": "image_url", "url": "https://example.com/ref.webp"},
-            ],
+            "aspect_ratio": "1:2",
+            "prompt": "Lego art version of Superman and Batman，Night scene",
+            "n": 1,
+            "resolution": "1k",
         }
-    ],
-    "parameters": {"duration": 5},
-})
+    )
+    .build()
+)
+
+task = client.modal.create(body)
 ```
-
-### 内容类型构造器
-
-| 函数 | 说明 |
-|------|------|
-| `sa.Text(text)` | 文本内容 |
-| `sa.ImageURL(url)` | 图片 URL |
-| `sa.VideoURL(url)` | 视频 URL |
-| `sa.AudioURL(url)` | 音频 URL |
-| `sa.FileID(id)` | 文件 ID |
 
 ### 等待任务完成
 
@@ -115,6 +143,104 @@ task = client.modal.wait("task_abc123")
 | `sa.WithPollInterval(seconds)` | 轮询间隔（秒） | 3.0 |
 | `sa.WithPollTimeout(seconds)` | 最大等待时间（秒） | 300.0 |
 | `sa.WithPollCallback(fn)` | 进度回调 `fn(status, progress)` | - |
+
+### 预扣费查询
+
+预扣费查询路由为 `/model/v1/generation/precharge`，请求参数与创建任务相同。
+
+```python
+resp = client.modal.precharge(
+    {
+        "id": "d88pmute87128c73e9r0d0",
+        "model": "volces_seedream_4_5",
+        "input": [
+            {
+                "params": {
+                    "prompt": "A dog",
+                }
+            }
+        ],
+        "moderation": False,
+    }
+)
+
+print(resp.status)
+print(resp.data.billing_model, resp.data.cost, resp.data.currency)
+```
+
+响应示例：
+
+```json
+{
+  "data": {
+    "billing_model": "volces_seedream_4_5",
+    "cost": "0.035714285714",
+    "currency": "USD",
+    "discount": 0.7,
+    "hash": "v1:18a733f04d227d572950ed8f1f98a9ba4cd37c168c5c98c05a5e574984f58eaf",
+    "model": "volces_seedream_4_5",
+    "original_model": "volces_seedream_4_5",
+    "sample_count": 4,
+    "updated_at": 1780633394064
+  },
+  "status": "success"
+}
+```
+
+字段说明：
+
+- `status`：查询状态，成功时为 `success`
+- `data.billing_model`：计费模型名
+- `data.cost`：预扣费金额
+- `data.currency`：币种
+- `data.discount`：折扣系数
+- `data.hash`：本次预扣费结果哈希
+- `data.model`：当前请求模型
+- `data.original_model`：原始模型名
+- `data.sample_count`：采样数量
+- `data.updated_at`：更新时间戳（毫秒）
+
+未匹配上预扣费数据时，可能返回：
+
+```json
+{
+  "data": {
+    "cost": null,
+    "hash": "v1:02833b68895eeb61bf214d35fd669502ef788e4c8d58505893414ae9632ca8ab",
+    "model": "volces_seedream_4_5",
+    "original_model": "volces_seedream_4_5",
+    "reason": "COST_CACHE_MISS"
+  },
+  "status": "failed"
+}
+```
+
+此时可重点关注：
+
+- `status`：这里会是 `failed`
+- `data.cost`：可能为 `null`
+- `data.reason`：失败原因，例如 `COST_CACHE_MISS`
+
+Typed helper：
+
+```python
+body = (
+    sa.NewTask("volces_seedream_4_5")
+    .moderation(False)
+    .field("id", "d88pmute87128c73e9r0d0")
+    .params(
+        {
+            "prompt": "A dog",
+        }
+    )
+    .build()
+)
+
+resp = client.modal.precharge(body)
+
+print(resp.status)
+print(resp.data.billing_model, resp.data.cost, resp.data.currency)
+```
 
 ### 获取任务结果
 
@@ -433,13 +559,26 @@ client = sa.Client(sa.ClientConfig(api_key="sa-your-api-key"))
 
 # 创建任务
 task = client.modal.create(
-    sa.NewTask("vidu_q3_reference")
-    .user(
-        sa.Text("一只猫在月光下奔跑，电影级画面"),
-        sa.ImageURL("https://example.com/cat.jpg"),
-    )
-    .param("duration", 5)
-    .build()
+    {
+        "moderation": True,
+        "model": "alibaba_wanx26_i2v_flash",
+        "input": [
+            {
+                "params": {
+                    "input": {
+                        "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                        "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                    },
+                    "parameters": {
+                        "resolution": "720P",
+                        "duration": 5,
+                        "prompt_extend": True,
+                        "watermark": False,
+                    },
+                }
+            }
+        ],
+    }
 )
 
 print(f"任务已创建: {task.id}")

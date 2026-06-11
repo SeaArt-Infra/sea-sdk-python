@@ -80,6 +80,8 @@ from .modal_types import (
     Output,
     OutputContent,
     PollConfig,
+    PrechargeData,
+    PrechargeResponse,
     Task,
     TaskBuilder,
     TaskCreateRequest,
@@ -99,7 +101,6 @@ from .modal_types import (
     image_url,
     new_task,
     text,
-    user,
     video_url,
     with_poll_callback,
     with_poll_interval,
@@ -122,7 +123,6 @@ ImageURL = image_url
 VideoURL = video_url
 AudioURL = audio_url
 FileID = file_id
-User = user
 # Detect political or public-safety sensitive content in image scans.
 ImageScanRiskTypePolity = IMAGE_SCAN_RISK_TYPE_POLITY
 # Detect erotic, pornographic, nudity, or sexually suggestive content in image scans.
@@ -218,6 +218,8 @@ __all__ = [
     "Output",
     "OutputContent",
     "PollConfig",
+    "PrechargeData",
+    "PrechargeResponse",
     "PassthroughResponse",
     "PassthroughService",
     "RawResponse",
@@ -259,7 +261,6 @@ __all__ = [
     "TextScanWayModel",
     "Text",
     "Usage",
-    "User",
     "VideoURL",
     "WithHeader",
     "WithHeaders",

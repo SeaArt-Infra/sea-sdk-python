@@ -32,35 +32,46 @@ class ModalServiceTests(unittest.TestCase):
             self.assertEqual(request_path(request), "/v1/generation")
             self.assertEqual(request_headers(request)["X-trace-id"], "trace-123")
             body = request_json(request)
-            self.assertEqual(body["model"], "vidu_q3_reference")
-            self.assertEqual(body["parameters"]["duration"], 5)
+            self.assertTrue(body["moderation"])
+            self.assertEqual(body["model"], "alibaba_wanx26_i2v_flash")
+            self.assertEqual(
+                body["input"][0]["params"]["input"]["img_url"],
+                "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+            )
+            self.assertEqual(body["input"][0]["params"]["parameters"]["duration"], 5)
             return json_response(
                 200,
-                {"id": "task_create", "status": "in_progress", "model": "vidu_q3_reference"},
+                {"id": "task_create", "status": "in_progress", "model": "alibaba_wanx26_i2v_flash"},
             )
 
         client = make_client()
         with patch_urlopen(handler):
             task = client.modal.create(
                 {
-                    "model": "vidu_q3_reference",
+                    "moderation": True,
+                    "model": "alibaba_wanx26_i2v_flash",
                     "input": [
                         {
-                            "type": "message",
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": "cinematic shot"},
-                                {"type": "image_url", "url": "https://example.com/ref1.webp"},
-                            ],
+                            "params": {
+                                "input": {
+                                    "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                                    "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                                },
+                                "parameters": {
+                                    "resolution": "720P",
+                                    "duration": 5,
+                                    "prompt_extend": True,
+                                    "watermark": False,
+                                },
+                            },
                         }
                     ],
-                    "parameters": {"duration": 5},
                 },
                 WithHeader("X-Trace-Id", "trace-123"),
             )
         self.assertEqual(task.id, "task_create")
         self.assertEqual(task.status, "in_progress")
-        self.assertEqual(task.model, "vidu_q3_reference")
+        self.assertEqual(task.model, "alibaba_wanx26_i2v_flash")
 
     def test_get_returns_task(self) -> None:
         def handler(request):
@@ -86,6 +97,91 @@ class ModalServiceTests(unittest.TestCase):
         self.assertEqual(task.status, "completed")
         self.assertEqual(task.progress, 1.0)
         self.assertEqual(task.urls(), ["https://example.com/out.mp4"])
+
+    def test_precharge_returns_billing_preview(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/generation/precharge")
+            body = request_json(request)
+            self.assertEqual(body["id"], "d88pmute87128c73e9r0d0")
+            self.assertEqual(body["model"], "volces_seedream_4_5")
+            self.assertFalse(body["moderation"])
+            self.assertEqual(body["input"][0]["params"]["prompt"], "A dog")
+            return json_response(
+                200,
+                {
+                    "data": {
+                        "billing_model": "volces_seedream_4_5",
+                        "cost": "0.035714285714",
+                        "currency": "USD",
+                        "discount": 0.7,
+                        "hash": "v1:18a733f04d227d572950ed8f1f98a9ba4cd37c168c5c98c05a5e574984f58eaf",
+                        "model": "volces_seedream_4_5",
+                        "original_model": "volces_seedream_4_5",
+                        "sample_count": 4,
+                        "updated_at": 1780633394064,
+                    },
+                    "status": "success",
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.precharge(
+                {
+                    "id": "d88pmute87128c73e9r0d0",
+                    "model": "volces_seedream_4_5",
+                    "input": [
+                        {
+                            "params": {
+                                "prompt": "A dog",
+                            }
+                        }
+                    ],
+                    "moderation": False,
+                }
+            )
+
+        self.assertEqual(response.status, "success")
+        self.assertIsNotNone(response.data)
+        self.assertEqual(response.data.billing_model, "volces_seedream_4_5")
+        self.assertEqual(response.data.cost, "0.035714285714")
+        self.assertEqual(response.data.currency, "USD")
+        self.assertEqual(response.data.sample_count, 4)
+
+    def test_precharge_supports_cache_miss_response(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/generation/precharge")
+            return json_response(
+                200,
+                {
+                    "data": {
+                        "cost": None,
+                        "hash": "v1:02833b68895eeb61bf214d35fd669502ef788e4c8d58505893414ae9632ca8ab",
+                        "model": "volces_seedream_4_5",
+                        "original_model": "volces_seedream_4_5",
+                        "reason": "COST_CACHE_MISS",
+                    },
+                    "status": "failed",
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.precharge(
+                {
+                    "id": "d88pmute87128c73e9r0d0",
+                    "model": "volces_seedream_4_5",
+                    "input": [{"params": {"prompt": "A dog"}}],
+                    "moderation": False,
+                }
+            )
+
+        self.assertEqual(response.status, "failed")
+        self.assertIsNotNone(response.data)
+        self.assertIsNone(response.data.cost)
+        self.assertEqual(response.data.reason, "COST_CACHE_MISS")
 
     def test_list_models_searches_skill_models(self) -> None:
         def handler(request):
@@ -544,18 +640,61 @@ class ModalServiceTests(unittest.TestCase):
 
     def test_task_builder_builds_generic_request(self) -> None:
         body = (
-            NewTask("vidu_q3_reference")
-            .user(
-                Text("cinematic shot"),
-                ImageURL("https://example.com/ref1.webp"),
+            NewTask("alibaba_wanx26_i2v_flash")
+            .moderation(True)
+            .params(
+                {
+                    "input": {
+                        "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                        "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                    },
+                    "parameters": {
+                        "resolution": "720P",
+                        "duration": 5,
+                        "prompt_extend": True,
+                        "watermark": False,
+                    },
+                }
             )
-            .param("duration", 5)
             .metadata_item("trace_id", "trace-123")
             .build()
         )
-        self.assertEqual(body["model"], "vidu_q3_reference")
+        self.assertTrue(body["moderation"])
+        self.assertEqual(body["model"], "alibaba_wanx26_i2v_flash")
+        self.assertEqual(
+            body["input"][0]["params"]["input"]["img_url"],
+            "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+        )
+        self.assertEqual(body["input"][0]["params"]["parameters"]["resolution"], "720P")
+        self.assertEqual(body["input"][0]["params"]["parameters"]["duration"], 5)
         self.assertEqual(body["metadata"]["trace_id"], "trace-123")
 
+    def test_task_builder_supports_flat_params_and_top_level_fields(self) -> None:
+        body = (
+            NewTask("grok_imagine_image")
+            .field("dash_scope", True)
+            .moderation(True)
+            .params(
+                {
+                    "aspect_ratio": "1:2",
+                    "prompt": "Lego art version of Superman and Batman，Night scene",
+                    "n": 1,
+                    "resolution": "1k",
+                }
+            )
+            .build()
+        )
+
+        self.assertTrue(body["dash_scope"])
+        self.assertTrue(body["moderation"])
+        self.assertEqual(body["model"], "grok_imagine_image")
+        self.assertEqual(body["input"][0]["params"]["aspect_ratio"], "1:2")
+        self.assertEqual(
+            body["input"][0]["params"]["prompt"],
+            "Lego art version of Superman and Batman，Night scene",
+        )
+        self.assertEqual(body["input"][0]["params"]["n"], 1)
+        self.assertEqual(body["input"][0]["params"]["resolution"], "1k")
 
 if __name__ == "__main__":
     unittest.main()
