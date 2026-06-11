@@ -137,17 +137,6 @@ body = (
 task = client.modal.create(body)
 ```
 
-
-### 内容类型构造器
-
-| 函数 | 说明 |
-|------|------|
-| `sa.Text(text)` | 文本内容 |
-| `sa.ImageURL(url)` | 图片 URL |
-| `sa.VideoURL(url)` | 视频 URL |
-| `sa.AudioURL(url)` | 音频 URL |
-| `sa.FileID(id)` | 文件 ID |
-
 ### 等待任务完成
 
 ```python

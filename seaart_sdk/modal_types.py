@@ -432,9 +432,7 @@ class InputItem:
 @dataclass(slots=True)
 class TaskCreateRequest:
     model: str
-    input: list[InputItem] = field(default_factory=list)
     params: dict[str, Any] = field(default_factory=dict)
-    params_input: Any = None
     parameters: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
     options: dict[str, Any] = field(default_factory=dict)
@@ -446,17 +444,6 @@ class TaskCreateRequest:
         if self.moderation is not None:
             body["moderation"] = self.moderation
         params = dict(self.params)
-        if self.params_input is not None:
-            params["input"] = self.params_input
-        elif self.input:
-            raw_input_items = [_raw_input(item) for item in self.input]
-            existing_input = params.get("input")
-            if existing_input is None:
-                params["input"] = raw_input_items
-            elif isinstance(existing_input, list):
-                params["input"] = [*existing_input, *raw_input_items]
-            else:
-                params["input"] = [existing_input, *raw_input_items]
         if self.parameters:
             existing_parameters = params.get("parameters")
             if isinstance(existing_parameters, dict):
@@ -513,21 +500,6 @@ def _raw_part(part: ContentPart) -> dict[str, Any]:
 @dataclass(slots=True)
 class TaskBuilder:
     request: TaskCreateRequest
-
-    def input(self, item: InputItem) -> "TaskBuilder":
-        return self.input_item(item)
-
-    def input_item(self, item: InputItem) -> "TaskBuilder":
-        self.request.input.append(item)
-        return self
-
-    def user(self, *parts: ContentPart) -> "TaskBuilder":
-        self.request.input.append(user(*parts))
-        return self
-
-    def params_input(self, value: Any) -> "TaskBuilder":
-        self.request.params_input = value
-        return self
 
     def params(self, value: dict[str, Any]) -> "TaskBuilder":
         self.request.params = dict(value)
@@ -589,10 +561,6 @@ def audio_url(url: str) -> ContentPart:
 
 def file_id(value: str) -> ContentPart:
     return ContentPart(type="file_id", file_id=value)
-
-
-def user(*parts: ContentPart) -> InputItem:
-    return InputItem(type="message", role="user", content=list(parts))
 
 
 @dataclass(slots=True)
