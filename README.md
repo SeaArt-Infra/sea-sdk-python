@@ -1,10 +1,6 @@
-# seaart-sdk
+# Sea Python SDK
 
-SeaArt AI 平台 Python SDK，按 `seaart_sdk_go` 的公开接口翻译实现，当前提供三类能力：
-
-- `client.modal` / `client.Modal`：多模态任务接口
-- `client.llm` / `client.LLM`：LLM 透传接口
-- `client.passthrough` / `client.Passthrough`：厂商原始 API 透传接口
+Sea AI 平台 Python SDK，用于通过统一网关调用多模态、LLM 和厂商透传能力。
 
 特点：
 
@@ -12,6 +8,17 @@ SeaArt AI 平台 Python SDK，按 `seaart_sdk_go` 的公开接口翻译实现，
 - 保留原始请求透传能力
 - 支持 SSE 流式响应解析
 - 支持任务轮询和通用 task builder
+
+## 功能导航
+
+| 服务 | Client 字段 | 功能 |
+|------|-------------|------|
+| [多模态 API](#多模态-api) | `client.modal` / `client.Modal` | 模型列表、参数详情、生成任务、预扣费查询和厂商透传 |
+| [图片/视频鉴黄](#图片视频鉴黄) | `client.modal.scan_image(...)` | 检测图片、GIF 或视频内容安全风险 |
+| [敏感词检测](#敏感词检测) | `client.modal.scan_text(...)` | 检测文本敏感词和组合词风险 |
+| [人脸检测](#人脸检测) | `client.modal.scan_face(...)` | 检测图片或视频中的人脸相关结果 |
+| [音频检测](#音频检测) | `client.modal.scan_audio(...)` | 检测音频内容风险 |
+| [LLM API](#llm-api) | `client.llm` / `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank 等兼容接口 |
 
 ## 安装
 
@@ -37,7 +44,7 @@ client = sa.Client(
 )
 ```
 
-默认网关地址为 `https://gateway.example.com`。如果你的环境使用自定义网关，通常只需要覆盖 `base_url`，SDK 会基于同一个网关地址调用不同功能。
+通过 `base_url` 配置统一网关地址，SDK 会基于该地址调用多模态、LLM 和透传等能力。
 
 ```python
 client = sa.Client(
@@ -630,17 +637,19 @@ resp = sa.Decode(raw, sa.ChatCompletionResponse)
 print(resp.choices[0].message.content)
 ```
 
-当前支持：
+当前支持的方法：
 
-- `chat_completions`
-- `chat_completions_stream`
-- `messages`
-- `messages_stream`
-- `responses`
-- `responses_stream`
-- `rerank`
-- `embeddings`
-- `list_models`
+| 方法 | 说明 |
+|------|------|
+| `chat_completions` | 调用 OpenAI Chat Completions 兼容接口，返回原始响应字节 |
+| `chat_completions_stream` | 调用 Chat Completions 流式接口，返回可迭代的 SSE 流式事件 |
+| `messages` | 调用 Anthropic Messages 兼容接口，返回原始响应字节 |
+| `messages_stream` | 调用 Messages 流式接口，返回可迭代的 SSE 流式事件 |
+| `responses` | 调用 OpenAI Responses 兼容接口，返回原始响应字节 |
+| `responses_stream` | 调用 Responses 流式接口，返回可迭代的 SSE 流式事件 |
+| `rerank` | 调用文本重排接口 |
+| `embeddings` | 调用向量生成接口 |
+| `list_models` | 查询 LLM 模型列表 |
 
 流式响应示例：
 
