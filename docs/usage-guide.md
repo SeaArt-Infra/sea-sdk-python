@@ -512,31 +512,37 @@ print(result.extra)
 | `usage` | `Usage` | 网关注入的计费信息 |
 | `extra` | `dict` | 上游返回的未建模字段，例如风险等级、标签、人脸数量等 |
 
-**不含人脸图片响应示例**
+**不含人脸图片响应示例（SDK 返回结构）**
 
 ```json
 {
-  "nsfw_level": 0,
-  "label_items": [],
-  "risk_types": [],
   "ok": true,
+  "error": "",
   "usage": {
     "cost": "1"
+  },
+  "extra": {
+    "nsfw_level": 0,
+    "label_items": [],
+    "risk_types": []
   }
 }
 ```
 
-**含人脸图片响应示例**
+**含人脸图片响应示例（SDK 返回结构）**
 
 ```json
 {
+  "ok": true,
+  "error": "",
   "usage": {
     "cost": "1"
   },
-  "nsfw_level": 0,
-  "label_items": [],
-  "risk_types": [],
-  "ok": true
+  "extra": {
+    "nsfw_level": 0,
+    "label_items": [],
+    "risk_types": []
+  }
 }
 ```
 
