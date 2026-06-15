@@ -340,6 +340,26 @@ print(result.extra.get("face_count"))
 
 也可以传 `img_base64`。视频检测设置 `is_video=1`，可传 `duration`。上游返回中的未建模字段会保留在 `extra`。
 
+### 音频检测
+
+音频检测接口走 `model_base_url`，对应 `POST /v1/audio/scan`，用于音频风险检测。网关会转发到下游音频检测服务并注入 `usage` 计费信息。
+
+```python
+result = client.modal.scan_audio(
+    sa.AudioScanRequest(
+        uri="https://example.com/audio/test.mp3",
+        rec_type="AUDIOPOLITICAL_MOAN_ANTHEN",
+        duration=15.0,
+    )
+)
+
+print(result.risk_level, result.risk_description, result.usage)
+for label in result.all_labels:
+    print(label.label1, label.label2, label.description)
+```
+
+`rec_type` 为检测类型，`duration` 为音频时长秒数并用于计费。上游返回中的未建模字段会保留在 `extra`。
+
 **Task 状态：** `"in_progress"` / `"completed"` / `"failed"`
 
 ---

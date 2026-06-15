@@ -8,6 +8,8 @@ from urllib.parse import quote, urlencode
 from .errors import ERR_NETWORK, ERR_TASK_FAILED, ERR_TIMEOUT, SeaArtError, new_http_error
 from .modal_types import (
     APIError,
+    AudioScanRequest,
+    AudioScanResponse,
     FaceScanRequest,
     FaceScanResponse,
     GenerationResponse,
@@ -186,6 +188,28 @@ class ModalService:
         if status >= 400:
             raise _http_error(status, payload)
         return decode(payload, TextScanResponse)
+
+    def scan_audio(
+        self,
+        request: AudioScanRequest | dict[str, object],
+        *options: RequestOption,
+    ) -> AudioScanResponse:
+        """Scan audio through model_base_url + /v1/audio/scan."""
+        body = request.raw() if isinstance(request, AudioScanRequest) else request
+        uri = str(body.get("uri", "")).strip()
+        if not uri:
+            raise SeaArtError(kind="general", message="uri is required")
+
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "POST",
+            "/v1/audio/scan",
+            body,
+            request_options.headers,
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        return decode(payload, AudioScanResponse)
 
     def get(self, task_id: str, *options: RequestOption) -> Task:
         request_options = build_request_options(options)

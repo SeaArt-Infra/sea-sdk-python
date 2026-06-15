@@ -6,6 +6,7 @@ from urllib.parse import parse_qs, urlparse
 from seaart_sdk import (
     ERR_TASK_FAILED,
     FaceScanRequest,
+    AudioScanRequest,
     ImageScanRequest,
     ImageScanRiskTypeErotic,
     ImageScanRiskTypeViolent,
@@ -547,6 +548,76 @@ class ModalServiceTests(unittest.TestCase):
         client = make_client()
         with self.assertRaises(SeaArtError):
             client.modal.scan_text(TextScanRequest(text=" "))
+
+    def test_scan_audio_posts_audio_scan_request(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/audio/scan")
+            self.assertEqual(request_headers(request)["Authorization"], "Bearer test-key")
+            self.assertEqual(request_headers(request)["X-trace-id"], "trace-audio")
+
+            body = request_json(request)
+            self.assertEqual(body["uri"], "https://example.com/audio/test.mp3")
+            self.assertEqual(body["rec_type"], "AUDIOPOLITICAL_MOAN_ANTHEN")
+            self.assertEqual(body["duration"], 15.0)
+
+            return json_response(
+                200,
+                {
+                    "riskDescription": "涉政音频",
+                    "riskLevel": "REJECT",
+                    "allLabels": [
+                        {
+                            "label1": "politics",
+                            "label2": "leader",
+                            "description": "涉政内容",
+                        }
+                    ],
+                    "usage": {"cost": "0.001"},
+                    "request_id": "audio-risk-1",
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_audio(
+                AudioScanRequest(
+                    uri="https://example.com/audio/test.mp3",
+                    rec_type="AUDIOPOLITICAL_MOAN_ANTHEN",
+                    duration=15.0,
+                ),
+                WithHeader("X-Trace-Id", "trace-audio"),
+            )
+
+        self.assertEqual(response.risk_description, "涉政音频")
+        self.assertEqual(response.risk_level, "REJECT")
+        self.assertEqual(response.all_labels[0].label1, "politics")
+        self.assertIsNotNone(response.usage)
+        self.assertEqual(response.usage.cost, "0.001")
+        self.assertEqual(response.extra["request_id"], "audio-risk-1")
+
+    def test_scan_audio_accepts_raw_dict(self) -> None:
+        def handler(request):
+            self.assertEqual(request_path(request), "/v1/audio/scan")
+            self.assertEqual(request_json(request)["rec_type"], "custom")
+            return json_response(200, {"riskDescription": "正常", "riskLevel": "PASS", "allLabels": []})
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_audio(
+                {
+                    "uri": "https://example.com/audio/clean.mp3",
+                    "rec_type": "custom",
+                }
+            )
+
+        self.assertEqual(response.risk_level, "PASS")
+        self.assertEqual(response.all_labels, [])
+
+    def test_scan_audio_requires_uri(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.scan_audio(AudioScanRequest(uri=" "))
 
     def test_wait_completes(self) -> None:
         polls = {"count": 0}

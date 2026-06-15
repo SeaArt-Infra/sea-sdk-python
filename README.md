@@ -369,6 +369,26 @@ print(result.extra.get("face_count"))
 
 也可以传 `img_base64`。视频检测时设置 `is_video=1`，并可传 `duration` 用于计费。上游人脸检测返回结构会保留在 `result.extra`，网关注入的计费信息在 `result.usage`。
 
+音频检测：
+
+音频检测接口复用 `model_base_url`，对应 `POST /v1/audio/scan`。
+
+```python
+result = client.modal.scan_audio(
+    sa.AudioScanRequest(
+        uri="https://example.com/audio/test.mp3",
+        rec_type="AUDIOPOLITICAL_MOAN_ANTHEN",
+        duration=15.0,
+    )
+)
+
+print(result.risk_level, result.risk_description, result.usage)
+for label in result.all_labels:
+    print(label.label1, label.label2, label.description)
+```
+
+也可以直接传 dict。`duration` 为音频时长秒数，用于计费；上游未建模字段会保留在 `result.extra`。
+
 ## Passthrough API
 
 Passthrough 层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
