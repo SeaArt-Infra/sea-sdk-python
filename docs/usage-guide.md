@@ -24,30 +24,29 @@ client = sa.Client(sa.ClientConfig(api_key="sa-your-api-key"))
 
 ---
 
-## 客户端配��
+## 客户端配置
 
 ```python
 client = sa.Client(
     sa.ClientConfig(
         api_key="sa-your-api-key",                        # 必填：SeaArt API Key
-        base_url="https://custom-url.com",                # 可选：自定义基础地址
-        model_base_url="https://model-url.com",           # 可选：多模态端点
-        llm_base_url="https://llm-url.com",               # 可选：LLM 端点
-        passthrough_base_url="https://model-url.com",     # 可选：厂商透传端点，默认同 model_base_url
+        base_url="https://gateway.example.com",           # 可选：自定义网关地址
         project="my-project",                             # 可选：作为 X-Project 头发送
         timeout=60.0,                                     # 可选：默认 300 秒（5 分钟）
     )
 )
 ```
 
-**默认端点：** `https://gateway.example.com`
+**默认网关地址：** `https://gateway.example.com`
 **认证方式：** `Authorization: Bearer {api_key}`
+
+通常只需要配置 `base_url`；SDK 会基于同一个网关地址调用多模态、LLM 和厂商透传能力。
 
 ---
 
-## Modal API（多模态任务）
+## 多模态 API
 
-### 创建任务
+**创建任务**
 
 ```python
 task = client.modal.create({
@@ -254,9 +253,51 @@ for output in task.output:
         print(f"类型: {content.type}, URL: {content.url}")
 ```
 
-### 图片/视频鉴黄
+### Passthrough API（厂商透传）
 
-鉴黄接口走 `model_base_url`，对应 `POST /v1/image/scan`，用于图片、GIF 或视频风险检测。
+用于调用厂商原始 API 形态的接口，路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
+
+#### JSON 请求
+
+```python
+resp = client.passthrough.post(
+    "/kling/v1/videos/text2video",
+    {
+        "model_name": "kling-v1",
+        "prompt": "cinematic shot",
+    },
+    sa.WithHeader("X-Trace-Id", "trace-123"),
+)
+
+print(resp.status_code)
+print(resp.body.decode("utf-8"))
+```
+
+#### 原始请求体透传
+
+```python
+resp = client.passthrough.request_raw(
+    "POST",
+    "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
+    b'{"contents":[{"parts":[{"text":"paint a cat"}]}]}',
+)
+```
+
+`PassthroughResponse` 会保留响应状态码、响应头和原始 body：
+
+```python
+@dataclass
+class PassthroughResponse:
+    status_code: int
+    headers: dict[str, str]
+    body: bytes
+```
+
+---
+
+## 图片/视频鉴黄
+
+鉴黄接口对应 `POST /v1/image/scan`，用于图片、GIF 或视频风险检测。
 
 ```python
 result = client.modal.scan_image(
@@ -298,9 +339,9 @@ result = client.modal.scan_image({
 | `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
 | `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
 
-### 敏感词检测
+## 敏感词检测
 
-敏感词检测接口走 `model_base_url`，对应 `POST /v1/text/scan`。
+敏感词检测接口对应 `POST /v1/text/scan`。
 
 ```python
 result = client.modal.scan_text(
@@ -321,9 +362,9 @@ print(result.data.combination)
 
 `area_types` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `start_index` / `end_index` 基于 rune 数组；`is_sensitive` 表示整体是否命中敏感内容，`combination` 保留组合规则命中详情，未建模字段会保留在 `extra`。
 
-### 人脸检测
+## 人脸检测
 
-人脸检测接口走 `model_base_url`，对应 `POST /v1/face/scan`，用于图片或视频人脸检测。网关会转发到上游 `/cloud/face/scan`。
+人脸检测接口对应 `POST /v1/face/scan`，用于图片或视频人脸检测。网关会转发到上游 `/cloud/face/scan`。
 
 ```python
 result = client.modal.scan_face(
@@ -340,49 +381,27 @@ print(result.extra.get("face_count"))
 
 也可以传 `img_base64`。视频检测设置 `is_video=1`，可传 `duration`。上游返回中的未建模字段会保留在 `extra`。
 
+## 音频检测
+
+音频检测接口对应 `POST /v1/audio/scan`，用于音频风险检测。网关会转发到下游音频检测服务并注入 `usage` 计费信息。
+
+```python
+result = client.modal.scan_audio(
+    sa.AudioScanRequest(
+        uri="https://example.com/audio/test.mp3",
+        rec_type="AUDIOPOLITICAL_MOAN_ANTHEN",
+        duration=15.0,
+    )
+)
+
+print(result.risk_level, result.risk_description, result.usage)
+for label in result.all_labels:
+    print(label.label1, label.label2, label.description)
+```
+
+`rec_type` 为检测类型，`duration` 为音频时长秒数并用于计费。上游返回中的未建模字段会保留在 `extra`。
+
 **Task 状态：** `"in_progress"` / `"completed"` / `"failed"`
-
----
-
-## Passthrough API（厂商透传）
-
-用于调用厂商原始 API 形态的接口，路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
-
-### JSON 请求
-
-```python
-resp = client.passthrough.post(
-    "/kling/v1/videos/text2video",
-    {
-        "model_name": "kling-v1",
-        "prompt": "cinematic shot",
-    },
-    sa.WithHeader("X-Trace-Id", "trace-123"),
-)
-
-print(resp.status_code)
-print(resp.body.decode("utf-8"))
-```
-
-### 原始请求体透传
-
-```python
-resp = client.passthrough.request_raw(
-    "POST",
-    "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
-    b'{"contents":[{"parts":[{"text":"paint a cat"}]}]}',
-)
-```
-
-`PassthroughResponse` 会保留响应状态码、响应头和原始 body：
-
-```python
-@dataclass
-class PassthroughResponse:
-    status_code: int
-    headers: dict[str, str]
-    body: bytes
-```
 
 ---
 

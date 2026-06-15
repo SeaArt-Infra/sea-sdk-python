@@ -37,32 +37,22 @@ client = sa.Client(
 )
 ```
 
-默认网关配置：
-
-- `base_url`: `https://gateway.example.com`
-- `model_base_url`: `https://gateway.example.com/model`
-- `llm_base_url`: `https://gateway.example.com/llm`
-- `passthrough_base_url`: `https://gateway.example.com/model`
-
-也可以分别覆盖：
+默认网关地址为 `https://gateway.example.com`。如果你的环境使用自定义网关，通常只需要覆盖 `base_url`，SDK 会基于同一个网关地址调用不同功能。
 
 ```python
 client = sa.Client(
     sa.ClientConfig(
         api_key="sa-your-api-key",
         base_url="https://gateway.example.com",
-        model_base_url="https://mm-gateway.example.com",
-        llm_base_url="https://llm-gateway.example.com",
-        passthrough_base_url="https://mm-gateway.example.com",
         timeout=60.0,
         project="my-project",
     )
 )
 ```
 
-## Modal API
+## 多模态 API
 
-原始透传请求：
+**创建任务**
 
 ```python
 task = client.modal.create(
@@ -94,7 +84,7 @@ print(task.id, task.status)
 
 `moderation` 为布尔类型，非必传；`True` 表示开白，`False` 表示非开白。
 
-等待任务完成：
+**等待任务完成**
 
 ```python
 task = client.modal.wait(
@@ -106,7 +96,7 @@ task = client.modal.wait(
 print(task.status, task.progress, task.urls())
 ```
 
-预扣费查询：
+**预扣费查询**
 
 ```python
 resp = client.modal.precharge(
@@ -128,7 +118,7 @@ print(resp.status)
 print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 ```
 
-响应示例：
+**响应示例**
 
 ```json
 {
@@ -147,7 +137,7 @@ print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 }
 ```
 
-字段说明：
+**字段说明**
 
 - `status`：查询状态，成功时为 `success`
 - `data.billing_model`：计费模型名
@@ -160,7 +150,7 @@ print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 - `data.sample_count`：采样数量
 - `data.updated_at`：更新时间戳（毫秒）
 
-未匹配上预扣费数据时，可能返回：
+**未匹配上预扣费数据时，可能返回**
 
 ```json
 {
@@ -175,13 +165,13 @@ print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 }
 ```
 
-此时可重点关注：
+**此时可重点关注**
 
 - `status`：这里会是 `failed`
 - `data.cost`：可能为 `null`
 - `data.reason`：失败原因，例如 `COST_CACHE_MISS`
 
-Typed helper：
+**Typed helper**
 
 ```python
 body = (
@@ -202,14 +192,14 @@ print(resp.status)
 print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 ```
 
-也可以在创建后继续等待：
+**也可以在创建后继续等待**
 
 ```python
 task = client.modal.create({"model": "alibaba_wanx26_i2v_flash"})
 task = task.wait(sa.WithPollInterval(5.0))
 ```
 
-Typed helper：
+**Typed helper**
 
 ```python
 body = (
@@ -257,8 +247,7 @@ body = (
 task = client.modal.create(body)
 ```
 
-
-模型列表和参数详情：
+**模型列表和参数详情**
 
 ```python
 models = client.modal.list_models(
@@ -283,9 +272,45 @@ print(skill)
 - `provider` -> `provider`
 - `limit` -> `limit`
 
-图片/视频鉴黄：
+### Passthrough API（厂商透传）
 
-鉴黄接口复用 `model_base_url`，对应 `POST /v1/image/scan`。请求会通过 openresty 转发到 inference-gateway。
+Passthrough 层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
+
+```python
+resp = client.passthrough.post(
+    "/kling/v1/videos/text2video",
+    {
+        "model_name": "kling-v1",
+        "prompt": "cinematic shot",
+    },
+    sa.WithHeader("X-Trace-Id", "trace-123"),
+)
+
+print(resp.status_code, resp.body.decode("utf-8"))
+```
+
+如果要完全透传原始 JSON 字节，使用 `request_raw`：
+
+```python
+resp = client.passthrough.request_raw(
+    "POST",
+    "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
+    b'{"contents":[{"parts":[{"text":"paint a cat"}]}]}',
+)
+```
+
+当前提供：
+
+- `request`
+- `request_raw`
+- `get`
+- `post`
+- `put`
+- `delete`
+
+## 图片/视频鉴黄
+
+鉴黄接口对应 `POST /v1/image/scan`。请求会通过网关转发到推理网关。
 
 ```python
 result = client.modal.scan_image(
@@ -327,9 +352,9 @@ result = client.modal.scan_image({
 | `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
 | `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
 
-敏感词检测：
+## 敏感词检测
 
-敏感词检测接口复用 `model_base_url`，对应 `POST /v1/text/scan`。
+敏感词检测接口对应 `POST /v1/text/scan`。
 
 ```python
 result = client.modal.scan_text(
@@ -350,9 +375,9 @@ print(result.data.combination)
 
 `area_types` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `start_index` / `end_index` 基于 rune 数组；`is_sensitive` 表示整体是否命中敏感内容，`combination` 保留组合规则命中详情，网关注入的计费信息在 `result.usage`。
 
-人脸检测：
+## 人脸检测
 
-人脸检测接口复用 `model_base_url`，对应 `POST /v1/face/scan`，由 openresty 转发到 inference-gateway，再转发到上游 `/cloud/face/scan`。
+人脸检测接口对应 `POST /v1/face/scan`，由网关转发到推理网关，再转发到上游 `/cloud/face/scan`。
 
 ```python
 result = client.modal.scan_face(
@@ -369,41 +394,25 @@ print(result.extra.get("face_count"))
 
 也可以传 `img_base64`。视频检测时设置 `is_video=1`，并可传 `duration` 用于计费。上游人脸检测返回结构会保留在 `result.extra`，网关注入的计费信息在 `result.usage`。
 
-## Passthrough API
+## 音频检测
 
-Passthrough 层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
-
-```python
-resp = client.passthrough.post(
-    "/kling/v1/videos/text2video",
-    {
-        "model_name": "kling-v1",
-        "prompt": "cinematic shot",
-    },
-    sa.WithHeader("X-Trace-Id", "trace-123"),
-)
-
-print(resp.status_code, resp.body.decode("utf-8"))
-```
-
-如果要完全透传原始 JSON 字节，使用 `request_raw`：
+音频检测接口对应 `POST /v1/audio/scan`。
 
 ```python
-resp = client.passthrough.request_raw(
-    "POST",
-    "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
-    b'{"contents":[{"parts":[{"text":"paint a cat"}]}]}',
+result = client.modal.scan_audio(
+    sa.AudioScanRequest(
+        uri="https://example.com/audio/test.mp3",
+        rec_type="AUDIOPOLITICAL_MOAN_ANTHEN",
+        duration=15.0,
+    )
 )
+
+print(result.risk_level, result.risk_description, result.usage)
+for label in result.all_labels:
+    print(label.label1, label.label2, label.description)
 ```
 
-当前提供：
-
-- `request`
-- `request_raw`
-- `get`
-- `post`
-- `put`
-- `delete`
+也可以直接传 dict。`duration` 为音频时长秒数，用于计费；上游未建模字段会保留在 `result.extra`。
 
 ## LLM API
 
@@ -452,40 +461,4 @@ for event in stream:
         break
     chunk = sa.Decode(event.data, sa.ChatCompletionResponse)
     print(chunk.choices[0].delta.content)
-```
-
-## 测试
-
-```bash
-python3 -m unittest discover -s tests -v
-```
-
-## 发布
-
-本地打包与检查：
-
-```bash
-make check
-```
-
-发布到默认 `twine` 仓库配置：
-
-```bash
-make release
-```
-
-发布到 GitLab Package Registry：
-
-```bash
-make release-gitlab \
-  TWINE_REPOSITORY_URL="https://<gitlab-host>/api/v4/projects/<project_id>/packages/pypi" \
-  TWINE_USERNAME="__token__" \
-  TWINE_PASSWORD="<token>"
-```
-
-GitLab CI 已配置为在打 tag 时自动构建并发布到当前项目的 Package Registry：
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
 ```

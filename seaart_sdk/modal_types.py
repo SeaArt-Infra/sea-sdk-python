@@ -271,6 +271,54 @@ class TextScanResponse:
 
 
 @dataclass(slots=True)
+class AudioScanRequest:
+    """Request body for POST /v1/audio/scan.
+
+    Attributes:
+        uri: Audio URL to scan.
+        rec_type: Upstream audio moderation type.
+        duration: Audio duration in seconds, used for billing when known.
+    """
+
+    uri: str
+    rec_type: str = ""
+    duration: float = 0.0
+
+    def raw(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "uri": self.uri,
+        }
+        if self.rec_type:
+            body["rec_type"] = self.rec_type
+        if self.duration:
+            body["duration"] = self.duration
+        return body
+
+
+@dataclass(slots=True)
+class AudioScanLabel:
+    """One audio moderation label returned by POST /v1/audio/scan."""
+
+    label1: str = ""
+    label2: str = ""
+    description: str = ""
+
+
+@dataclass(slots=True)
+class AudioScanResponse:
+    """Parsed response returned by POST /v1/audio/scan.
+
+    Extra keeps upstream response fields that are not modeled by the SDK yet.
+    """
+
+    risk_description: str = field(default="", metadata={"json": "riskDescription"})
+    risk_level: str = field(default="", metadata={"json": "riskLevel"})
+    all_labels: list[AudioScanLabel] = field(default_factory=list, metadata={"json": "allLabels"})
+    usage: Usage | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class FaceScanRequest:
     """Request body for POST /v1/face/scan.
 

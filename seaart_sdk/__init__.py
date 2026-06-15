@@ -66,6 +66,9 @@ from .modal_types import (
     TEXT_SCAN_WAY_MIXED,
     TEXT_SCAN_WAY_MODEL,
     APIError,
+    AudioScanLabel,
+    AudioScanRequest,
+    AudioScanResponse,
     ContentPart,
     FaceScanRequest,
     FaceScanResponse,
@@ -150,6 +153,9 @@ ModalModelSearchResponse = ModelSearchResponse
 
 __all__ = [
     "APIError",
+    "AudioScanLabel",
+    "AudioScanRequest",
+    "AudioScanResponse",
     "AudioURL",
     "ChatCompletionChoice",
     "ChatCompletionResponse",
