@@ -304,6 +304,25 @@ print(result.data.combination)
 
 `area_types` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `start_index` / `end_index` 基于 rune 数组；`is_sensitive` 表示整体是否命中敏感内容，`combination` 保留组合规则命中详情，未建模字段会保留在 `extra`。
 
+
+### 文本内容安全审核
+
+使用 `client.modal.scan_text_content` 调用 `model_base_url + /v1/text/content/scan`。该接口用于短文本内容安全审核，不影响旧敏感词检测接口 `client.modal.scan_text`。
+
+```python
+result = client.modal.scan_text_content(
+    sa.TextContentScanRequest(
+        text="hello world",
+        canary="A",
+        scene="user_name",
+    )
+)
+print(result.ok, result.level, result.label)
+print(result.reason, result.usage)
+```
+
+`TextContentScanRequest` 包含必填 `text`，以及可选 `canary` 和 `scene`。响应 `TextContentScanResponse` 包含 `ok`、`level`、`label`、`reason`、`usage` 和未建模字段 `extra`。
+
 ### 人脸检测
 
 使用 `client.modal.scan_face` 调用 `model_base_url + /v1/face/scan`。网关会转发到上游 `/cloud/face/scan`。
