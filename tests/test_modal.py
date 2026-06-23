@@ -15,6 +15,7 @@ from seaart_sdk import (
     NewTask,
     SeaArtError,
     Text,
+    TextContentScanRequest,
     TextScanAreaTypeForeign,
     TextScanRequest,
     TextScanWayDictionary,
@@ -548,6 +549,82 @@ class ModalServiceTests(unittest.TestCase):
         client = make_client()
         with self.assertRaises(SeaArtError):
             client.modal.scan_text(TextScanRequest(text=" "))
+
+    def test_scan_text_content_posts_content_scan_request(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/text/content/scan")
+            self.assertEqual(request_headers(request)["Authorization"], "Bearer test-key")
+            self.assertEqual(request_headers(request)["X-trace-id"], "trace-content-text")
+
+            body = request_json(request)
+            self.assertEqual(body["text"], "hello world")
+            self.assertEqual(body["canary"], "A")
+            self.assertEqual(body["scene"], "user_name")
+
+            return json_response(
+                200,
+                {
+                    "ok": True,
+                    "level": 5,
+                    "label": "pornography",
+                    "reason": "Explicit sexual description",
+                    "usage": {"cost": "0.001"},
+                    "request_id": "content-text-risk-1",
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_text_content(
+                TextContentScanRequest(
+                    text="hello world",
+                    canary="A",
+                    scene="user_name",
+                ),
+                WithHeader("X-Trace-Id", "trace-content-text"),
+            )
+
+        self.assertTrue(response.ok)
+        self.assertEqual(response.level, 5)
+        self.assertEqual(response.label, "pornography")
+        self.assertEqual(response.reason, "Explicit sexual description")
+        self.assertIsNotNone(response.usage)
+        self.assertEqual(response.usage.cost, "0.001")
+        self.assertEqual(response.extra["request_id"], "content-text-risk-1")
+
+    def test_scan_text_content_accepts_raw_dict(self) -> None:
+        def handler(request):
+            self.assertEqual(request_path(request), "/v1/text/content/scan")
+            self.assertEqual(request_json(request)["scene"], "seasoul")
+            return json_response(
+                200,
+                {
+                    "ok": True,
+                    "level": 0,
+                    "label": "normal",
+                    "reason": "Neutral greeting expression",
+                    "usage": {"cost": "0.001"},
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_text_content(
+                {
+                    "text": "raw prompt",
+                    "scene": "seasoul",
+                }
+            )
+
+        self.assertTrue(response.ok)
+        self.assertEqual(response.level, 0)
+        self.assertEqual(response.label, "normal")
+
+    def test_scan_text_content_requires_text(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.scan_text_content(TextContentScanRequest(text=" "))
 
     def test_scan_audio_posts_audio_scan_request(self) -> None:
         def handler(request):

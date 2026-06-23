@@ -475,6 +475,84 @@ print(result.data.combination)
 }
 ```
 
+
+## 文本内容安全审核
+
+文本内容安全审核接口对应 `POST /v1/text/content/scan`，用于对短文本进行内容安全审核，返回风险等级、分类标签和判定理由。该接口不影响旧敏感词检测接口 `POST /v1/text/scan`。
+
+```python
+result = client.modal.scan_text_content(
+    sa.TextContentScanRequest(
+        text="hello world",
+        canary="A",
+        scene="user_name",
+    )
+)
+
+print(result.ok, result.level, result.label)
+print(result.reason)
+print(result.usage)
+```
+
+也可以直接传入原始请求 dict：
+
+```python
+result = client.modal.scan_text_content(
+    {
+        "text": "这是一段需要审核的文本",
+        "canary": "A",
+        "scene": "seasoul",
+    }
+)
+```
+
+**请求字段**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `text` | `str` | 是 | 待审核文本 |
+| `canary` | `str` | 否 | 灰度分支，`A` 表示外部 LLM API 失败降级 vLLM，`B` 表示本地 vLLM |
+| `scene` | `str` | 否 | 业务场景标识，例如 `user_name`、`bio`、`comment`、`seasoul` |
+
+**响应字段**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `ok` | `bool` | 是否审核成功 |
+| `level` | `int` | 风险等级，范围 `0-6`，数值越大风险越高 |
+| `label` | `str` | 分类标签，英文 |
+| `reason` | `str` | 判定理由，英文或错误原因 |
+| `usage` | `Usage` | 网关注入的计费信息，`usage.cost` 为本次调用费用 |
+| `extra` | `dict` | 上游返回的未建模字段 |
+
+**审核通过响应示例**
+
+```json
+{
+  "ok": true,
+  "level": 0,
+  "label": "normal",
+  "reason": "Neutral greeting expression",
+  "usage": {
+    "cost": "0.001"
+  }
+}
+```
+
+**命中风险响应示例**
+
+```json
+{
+  "ok": true,
+  "level": 5,
+  "label": "pornography",
+  "reason": "Explicit sexual description",
+  "usage": {
+    "cost": "0.001"
+  }
+}
+```
+
 ## 人脸检测
 
 人脸检测接口对应 `POST /v1/face/scan`，用于检测图片或视频中的人脸相关结果。调用时可以传入媒体 URL，也可以传入图片 base64 内容。

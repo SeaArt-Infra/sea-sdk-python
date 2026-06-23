@@ -16,6 +16,7 @@ Sea AI 平台 Python SDK，用于通过统一网关调用多模态、LLM 和厂�
 | [多模态 API](#多模态-api) | `client.modal` / `client.Modal` | 模型列表、参数详情、生成任务、预扣费查询和厂商透传 |
 | [图片/视频鉴黄](#图片视频鉴黄) | `client.modal.scan_image(...)` | 检测图片、GIF 或视频内容安全风险 |
 | [敏感词检测](#敏感词检测) | `client.modal.scan_text(...)` | 检测文本敏感词和组合词风险 |
+| [文本内容安全审核](#文本内容安全审核) | `client.modal.scan_text_content(...)` | 审核短文本内容安全风险等级和分类标签 |
 | [人脸检测](#人脸检测) | `client.modal.scan_face(...)` | 检测图片或视频中的人脸相关结果 |
 | [音频检测](#音频检测) | `client.modal.scan_audio(...)` | 检测音频内容风险 |
 | [LLM API](#llm-api) | `client.llm` / `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank 等兼容接口 |
@@ -487,6 +488,83 @@ print(result.data.combination)
     "msg": "success",
     "request_id": "b5ebfb02a9d11adf98b05b397bd82e9e",
     "code": 10000
+  }
+}
+```
+
+## 文本内容安全审核
+
+文本内容安全审核接口对应 `POST /v1/text/content/scan`，用于对短文本进行内容安全审核，返回风险等级、分类标签和判定理由。该接口不影响旧敏感词检测接口 `POST /v1/text/scan`。
+
+```python
+result = client.modal.scan_text_content(
+    sa.TextContentScanRequest(
+        text="hello world",
+        canary="A",
+        scene="user_name",
+    )
+)
+
+print(result.ok, result.level, result.label)
+print(result.reason)
+print(result.usage)
+```
+
+也可以直接传入原始请求 dict：
+
+```python
+result = client.modal.scan_text_content(
+    {
+        "text": "这是一段需要审核的文本",
+        "canary": "A",
+        "scene": "seasoul",
+    }
+)
+```
+
+**请求字段**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `text` | `str` | 是 | 待审核文本 |
+| `canary` | `str` | 否 | 灰度分支，`A` 表示外部 LLM API 失败降级 vLLM，`B` 表示本地 vLLM |
+| `scene` | `str` | 否 | 业务场景标识，例如 `user_name`、`bio`、`comment`、`seasoul` |
+
+**响应字段**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `ok` | `bool` | 是否审核成功 |
+| `level` | `int` | 风险等级，范围 `0-6`，数值越大风险越高 |
+| `label` | `str` | 分类标签，英文 |
+| `reason` | `str` | 判定理由，英文或错误原因 |
+| `usage` | `Usage` | 网关注入的计费信息，`usage.cost` 为本次调用费用 |
+| `extra` | `dict` | 上游返回的未建模字段 |
+
+**审核通过响应示例**
+
+```json
+{
+  "ok": true,
+  "level": 0,
+  "label": "normal",
+  "reason": "Neutral greeting expression",
+  "usage": {
+    "cost": "0.001"
+  }
+}
+```
+
+**命中风险响应示例**
+
+```json
+{
+  "ok": true,
+  "level": 5,
+  "label": "pornography",
+  "reason": "Explicit sexual description",
+  "usage": {
+    "cost": "0.001"
   }
 }
 ```

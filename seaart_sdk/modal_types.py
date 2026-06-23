@@ -271,6 +271,48 @@ class TextScanResponse:
 
 
 @dataclass(slots=True)
+class TextContentScanRequest:
+    """Request body for POST /v1/text/content/scan.
+
+    Attributes:
+        text: Short text content to scan for content-safety risk.
+        canary: Canary branch. "A" routes to the external LLM API with vLLM
+            fallback, and "B" routes to local vLLM.
+        scene: Business scenario identifier, for example user_name, bio,
+            comment, or seasoul.
+    """
+
+    text: str
+    canary: str = ""
+    scene: str = ""
+
+    def raw(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "text": self.text,
+        }
+        if self.canary:
+            body["canary"] = self.canary
+        if self.scene:
+            body["scene"] = self.scene
+        return body
+
+
+@dataclass(slots=True)
+class TextContentScanResponse:
+    """Parsed response returned by POST /v1/text/content/scan.
+
+    Extra keeps upstream response fields that are not modeled by the SDK yet.
+    """
+
+    ok: bool = False
+    level: int = 0
+    label: str = ""
+    reason: str = ""
+    usage: Usage | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class AudioScanRequest:
     """Request body for POST /v1/audio/scan.
 

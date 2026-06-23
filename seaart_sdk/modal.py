@@ -20,6 +20,8 @@ from .modal_types import (
     PrechargeResponse,
     PollOption,
     Task,
+    TextContentScanRequest,
+    TextContentScanResponse,
     TextScanRequest,
     TextScanResponse,
     apply_poll_options,
@@ -188,6 +190,28 @@ class ModalService:
         if status >= 400:
             raise _http_error(status, payload)
         return decode(payload, TextScanResponse)
+
+    def scan_text_content(
+        self,
+        request: TextContentScanRequest | dict[str, object],
+        *options: RequestOption,
+    ) -> TextContentScanResponse:
+        """Scan short text through model_base_url + /v1/text/content/scan."""
+        body = request.raw() if isinstance(request, TextContentScanRequest) else request
+        text = str(body.get("text", "")).strip()
+        if not text:
+            raise SeaArtError(kind="general", message="text is required")
+
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "POST",
+            "/v1/text/content/scan",
+            body,
+            request_options.headers,
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        return decode(payload, TextContentScanResponse)
 
     def scan_audio(
         self,
