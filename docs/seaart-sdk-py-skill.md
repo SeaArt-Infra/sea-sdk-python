@@ -1,6 +1,6 @@
 ---
 name: seaart-sdk-py
-description: SeaArt Python SDK 使用助手 — 帮助用户用 seaart-sdk 调用 SeaArt AI 平台 API，包括多模态任务（图像/视频生成）、厂商透传和 LLM（对话、流式、embeddings、rerank）
+description: SeaArt Python SDK assistant — helps users call SeaArt AI platform APIs with seaart-sdk, including multimodal tasks (image/video generation), vendor passthrough, and LLMs (chat, streaming, embeddings, rerank)
 type: slash_command
 tags:
   - python
@@ -10,61 +10,61 @@ tags:
   - multimodal
 ---
 
-当用户触发此技能时，提供 SeaArt Python SDK（`seaart-sdk`）的调用指导。
+When this skill is triggered, provide usage guidance for the SeaArt Python SDK (`seaart-sdk`).
 
-**触发场景：** 用户需要用 Python 调用 SeaArt API、生成图像/视频、调用 LLM 接口，或遇到 SDK 使用问题时。
+**Scenario:** Use when the user needs to call SeaArt APIs from Python, generate images/videos, call LLM APIs, or troubleshoot SDK usage.
 
-**处理逻辑：**
+**Workflow:**
 
-1. 根据用户需求判断使用 Modal API（统一多模态任务）、Passthrough API（厂商原始接口）还是 LLM API（文本生成）
-2. 优先推荐直接使用 `input[*].params` 结构；如需类型化构造，可使用 `sa.NewTask(...).moderation(...).params({...}).build()`
-3. LLM 接口返回 `bytes`，提醒用户用 `sa.Decode(raw, Type)` 反序列化
-4. 流式接口推荐配合 `MessagesStreamTextAssembler` / `ResponsesStreamTextAssembler` 使用
-5. 错误处理建议捕获 `SeaArtError` 并按 `kind` 属性分类（ERR_AUTH/ERR_QUOTA/ERR_TIMEOUT/ERR_TASK_FAILED）
-6. SDK 仅支持同步调用，无 async/await
+1. Choose Modal API (unified multimodal tasks), Passthrough API (vendor-native APIs), or LLM API (text generation) based on the user request
+2. Prefer the direct `input[*].params` structure; for typed construction, use `sa.NewTask(...).moderation(...).params({...}).build()`
+3. LLM APIs return `bytes`; remind users to deserialize with `sa.Decode(raw, Type)`
+4. For streaming APIs, recommend using `MessagesStreamTextAssembler` / `ResponsesStreamTextAssembler`
+5. For error handling, recommend catching `SeaArtError` and branching by the `kind` attribute (ERR_AUTH/ERR_QUOTA/ERR_TIMEOUT/ERR_TASK_FAILED)
+6. The SDK only supports synchronous calls; there is no async/await API
 
-**输出格式：** 直接给出可运行的 Python 代码片段，附简短说明。代码使用 `import seaart_sdk as sa`。
+**Output format:** Provide runnable Python snippets with brief explanations. Use `import seaart_sdk as sa`.
 
 ---
 
-# SeaArt Python SDK 完整参考
+# SeaArt Python SDK Complete Reference
 
-SeaArt Python SDK（`seaart-sdk`）是 SeaArt AI 平台的官方 Python 客户端库，提供多模态任务（图像/视频生成）、厂商透传和 LLM 文本处理能力。
+SeaArt Python SDK (`seaart-sdk`) is the official Python client for the SeaArt AI platform. It provides multimodal tasks (image/video generation), vendor passthrough, and LLM text processing capabilities.
 
-**要求：** Python 3.10+，无第三方依赖
+**Requirements:** Python 3.10+, no third-party dependencies
 
-## 安装
+## Installation
 
 ```bash
 pip install seaart-sdk
 ```
 
-## 客户端配置
+## Client Configuration
 
 ```python
 import seaart_sdk as sa
 
 client = sa.Client(
     sa.ClientConfig(
-        api_key="sa-your-api-key",        # 必填
-        base_url="https://...",           # 可选：自定义基础地址
-        model_base_url="https://...",     # 可选：多模态端点
-        llm_base_url="https://...",       # 可选：LLM 端点
-        passthrough_base_url="https://...", # 可选：厂商透传端点，默认同 model_base_url
-        project="my-project",            # 可选：X-Project 头
-        timeout=60.0,                    # 可选：默认 300 秒
+        api_key="sa-your-api-key",        # Required
+        base_url="https://...",           # Optional: custom base URL
+        model_base_url="https://...",     # Optional: multimodal endpoint
+        llm_base_url="https://...",       # Optional: LLM endpoint
+        passthrough_base_url="https://...", # Optional: vendor passthrough endpoint, defaults to model_base_url
+        project="my-project",            # Optional: X-Project header
+        timeout=60.0,                    # Optional: default 300 seconds
     )
 )
 ```
 
-**默认端点：** `https://gateway.example.com`
-**认证方式：** `Authorization: Bearer {api_key}`
+**Default endpoint:** `https://gateway.example.com`
+**Authentication:** `Authorization: Bearer {api_key}`
 
 ---
 
-## Modal API（多模态任务）
+## Modal API (Multimodal Tasks)
 
-### 创建任务
+### Create task
 
 ```python
 task = client.modal.create({
@@ -74,7 +74,7 @@ task = client.modal.create({
         "params": {
             "input": {
                 "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
-                "prompt": "小狗和女孩在秋天的公园里快乐地玩耍"
+                "prompt": "A dog and a girl playing happily in an autumn park"
             },
             "parameters": {
                 "resolution": "720P",
@@ -87,9 +87,9 @@ task = client.modal.create({
 })
 ```
 
-`moderation` 为布尔类型，非必传；`True` 表示开白，`False` 表示非开白。
+`moderation` is a boolean and optional. `True` enables moderation allowlisting, while `False` disables it.
 
-### 创建任务（Typed helper）
+### Create task (Typed helper)
 
 ```python
 body = (
@@ -99,7 +99,7 @@ body = (
         {
             "input": {
                 "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
-                "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                "prompt": "A dog and a girl playing happily in an autumn park",
             },
             "parameters": {
                 "resolution": "720P",
@@ -116,7 +116,7 @@ body = (
 task = client.modal.create(body)
 ```
 
-有些模型会直接把模型字段平铺在 `params` 下，而不是拆成 `input` / `parameters`：
+Some models place fields directly under `params` instead of splitting them into `input` / `parameters`:
 
 ```python
 body = (
@@ -126,7 +126,7 @@ body = (
     .params(
         {
             "aspect_ratio": "1:2",
-            "prompt": "Lego art version of Superman and Batman，Night scene",
+            "prompt": "Lego art version of Superman and Batman, Night scene",
             "n": 1,
             "resolution": "1k",
         }
@@ -137,7 +137,7 @@ body = (
 task = client.modal.create(body)
 ```
 
-### 等待任务完成
+### Wait for Task Completion
 
 ```python
 task = task.wait(
@@ -146,16 +146,16 @@ task = task.wait(
     sa.WithPollCallback(lambda status, progress: print(f"{progress*100:.0f}%")),
 )
 
-# 获取输出 URL
+# Get output URLs
 for url in task.urls():
     print(url)
 ```
 
-**Task 状态：** `"in_progress"` / `"completed"` / `"failed"`
+**Task status:** `"in_progress"` / `"completed"` / `"failed"`
 
-### 预扣费查询
+### Precharge Estimate
 
-预扣费查询路由为 `/model/v1/generation/precharge`，请求参数与创建任务相同。
+The precharge route is `/model/v1/generation/precharge`, and its request parameters are the same as task creation.
 
 ```python
 resp = client.modal.precharge(
@@ -177,7 +177,7 @@ print(resp.status)
 print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 ```
 
-响应示例：
+Response example:
 
 ```json
 {
@@ -196,20 +196,20 @@ print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 }
 ```
 
-字段说明：
+Field descriptions:
 
-- `status`：查询状态，成功时为 `success`
-- `data.billing_model`：计费模型名
-- `data.cost`：预扣费金额
-- `data.currency`：币种
-- `data.discount`：折扣系数
-- `data.hash`：本次预扣费结果哈希
-- `data.model`：当前请求模型
-- `data.original_model`：原始模型名
-- `data.sample_count`：采样数量
-- `data.updated_at`：更新时间戳（毫秒）
+- `status`: Query status. Successful requests return `success`.
+- `data.billing_model`: Billing model name.
+- `data.cost`: Precharged amount.
+- `data.currency`: Currency.
+- `data.discount`: Discount factor.
+- `data.hash`: Hash of this precharge result.
+- `data.model`: Model in the current request.
+- `data.original_model`: Original model name.
+- `data.sample_count`: Sample count.
+- `data.updated_at`: Update timestamp in milliseconds.
 
-未匹配上预扣费数据时，可能返回：
+If no precharge data is matched, the response may be:
 
 ```json
 {
@@ -224,13 +224,13 @@ print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 }
 ```
 
-此时可重点关注：
+In this case, pay attention to:
 
-- `status`：这里会是 `failed`
-- `data.cost`：可能为 `null`
-- `data.reason`：失败原因，例如 `COST_CACHE_MISS`
+- `status`: This will be `failed`.
+- `data.cost`: May be `null`.
+- `data.reason`: Failure reason, such as `COST_CACHE_MISS`.
 
-Typed helper：
+Typed helper:
 
 ```python
 body = (
@@ -251,9 +251,9 @@ print(resp.status)
 print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 ```
 
-### 图片/视频鉴黄
+### Image/Video Safety Scan
 
-使用 `client.modal.scan_image` 调用 `model_base_url + /v1/image/scan`。
+Use `client.modal.scan_image` to call `model_base_url + /v1/image/scan`.
 
 ```python
 result = client.modal.scan_image(
@@ -271,20 +271,20 @@ result = client.modal.scan_image(
 print(result.ok, result.nsfw_level, result.risk_types)
 ```
 
-视频检测设置 `is_video=1`，可传 `duration`；响应中的 `frame_results` 包含帧级检测结果。
+For video scans, set `is_video=1` and optionally pass `duration`; `frame_results` in the response contains frame-level scan results.
 
-风险类型说明：
+Risk type descriptions:
 
-| 常量 | 接口值 | 说明 |
+| Constant | API Value | Description |
 |------|--------|------|
-| `sa.ImageScanRiskTypePolity` | `POLITY` | 政治敏感、公共安全等风险内容 |
-| `sa.ImageScanRiskTypeErotic` | `EROTIC` | 色情、裸露、性暗示等成人内容 |
-| `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
-| `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
+| `sa.ImageScanRiskTypePolity` | `POLITY` | Political, public-safety, or related sensitive content |
+| `sa.ImageScanRiskTypeErotic` | `EROTIC` | Erotic, nudity, sexually suggestive, or other adult content |
+| `sa.ImageScanRiskTypeViolent` | `VIOLENT` | Violence, gore, weapons, harm, or related content |
+| `sa.ImageScanRiskTypeChild` | `CHILD` | Child-safety risks, especially unsafe or sexualized child-related content |
 
-### 敏感词检测
+### Sensitive-Word Scan
 
-使用 `client.modal.scan_text` 调用 `model_base_url + /v1/text/scan`。
+Use `client.modal.scan_text` to call `model_base_url + /v1/text/scan`.
 
 ```python
 result = client.modal.scan_text(
@@ -302,12 +302,12 @@ print(result.data.sensitive_words)
 print(result.data.combination)
 ```
 
-`area_types` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `start_index` / `end_index` 基于 rune 数组；`is_sensitive` 表示整体是否命中敏感内容，`combination` 保留组合规则命中详情，未建模字段会保留在 `extra`。
+`area_types` supports `TextScanAreaTypeAll`, `TextScanAreaTypeDomestic`, and `TextScanAreaTypeForeign`. `way` supports `TextScanWayDictionary`, `TextScanWayModel`, `TextScanWayMixed`, and `TextScanWayCharacter`. Sensitive-word indexes `start_index` / `end_index` are based on rune arrays. `is_sensitive` indicates whether the whole text matched sensitive content. `combination` keeps combination-rule match details. Unmodeled fields are preserved in `extra`.
 
 
-### 文本内容安全审核
+### Text Content Safety Scan
 
-使用 `client.modal.scan_text_content` 调用 `model_base_url + /v1/text/content/scan`。该接口用于短文本内容安全审核，不影响旧敏感词检测接口 `client.modal.scan_text`。
+Use `client.modal.scan_text_content` to call `model_base_url + /v1/text/content/scan`. This endpoint reviews short text for content safety and does not affect the legacy sensitive-word API `client.modal.scan_text`.
 
 ```python
 result = client.modal.scan_text_content(
@@ -321,11 +321,11 @@ print(result.ok, result.level, result.label)
 print(result.reason, result.usage)
 ```
 
-`TextContentScanRequest` 包含必填 `text`，以及可选 `canary` 和 `scene`。响应 `TextContentScanResponse` 包含 `ok`、`level`、`label`、`reason`、`usage` 和未建模字段 `extra`。
+`TextContentScanRequest` contains required `text` plus optional `canary` and `scene`. `TextContentScanResponse` contains `ok`, `level`, `label`, `reason`, `usage`, and unmodeled fields in `extra`.
 
-### 人脸检测
+### Face Scan
 
-使用 `client.modal.scan_face` 调用 `model_base_url + /v1/face/scan`。网关会转发到上游 `/cloud/face/scan`。
+Use `client.modal.scan_face` to call `model_base_url + /v1/face/scan`. The gateway forwards the request to upstream `/cloud/face/scan`.
 
 ```python
 result = client.modal.scan_face(
@@ -339,13 +339,13 @@ print(result.ok, result.usage)
 print(result.extra.get("face_count"))
 ```
 
-也可以传 `img_base64`。视频检测设置 `is_video=1`，可传 `duration`；上游返回中的未建模字段会保留在 `extra`。
+You can also pass `img_base64`. For video scans, set `is_video=1` and optionally pass `duration`; unmodeled upstream response fields are preserved in `extra`.
 
 ---
 
-## Passthrough API（厂商透传）
+## Passthrough API (Vendor Passthrough)
 
-路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
+Paths must include a vendor prefix, such as `/kling/...`, `/vidu/...`, or `/google/...`.
 
 ```python
 resp = client.passthrough.post(
@@ -358,7 +358,7 @@ resp = client.passthrough.post(
 print(resp.status_code, resp.body.decode("utf-8"))
 ```
 
-完全透传原始 JSON 字节时使用 `request_raw`：
+Use `request_raw` when fully passing through raw JSON bytes:
 
 ```python
 resp = client.passthrough.request_raw(
@@ -372,22 +372,22 @@ resp = client.passthrough.request_raw(
 
 ## LLM API
 
-### Chat Completions（OpenAI 兼容）
+### Chat Completions (OpenAI Compatible)
 
 ```python
-# 非流式
+# Non-streaming
 raw = client.llm.chat_completions({
     "model": "gpt-4o-mini",
-    "messages": [{"role": "user", "content": "你好"}],
+    "messages": [{"role": "user", "content": "hello"}],
     "max_tokens": 64,
 })
 resp = sa.Decode(raw, sa.ChatCompletionResponse)
 print(resp.choices[0].message.content)
 
-# 流式
+# Streaming
 stream = client.llm.chat_completions_stream({
     "model": "gpt-4o-mini",
-    "messages": [{"role": "user", "content": "你好"}],
+    "messages": [{"role": "user", "content": "hello"}],
 })
 for event in stream:
     if event.err: raise event.err
@@ -396,13 +396,13 @@ for event in stream:
     print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
-### Messages API（Anthropic 格式）
+### Messages API (Anthropic Format)
 
 ```python
-# 流式 + 文本组装器
+# Streaming + text assembler
 stream = client.llm.messages_stream({
     "model": "claude-3-5-sonnet",
-    "messages": [{"role": "user", "content": "你好"}],
+    "messages": [{"role": "user", "content": "hello"}],
     "max_tokens": 256,
 })
 assembler = sa.MessagesStreamTextAssembler()
@@ -430,7 +430,7 @@ print(assembler.text())
 ```python
 raw = client.llm.embeddings({
     "model": "text-embedding-3-small",
-    "input": "需要向量化的文本",
+    "input": "text to embed",
 })
 resp = sa.Decode(raw, sa.EmbeddingsResponse)
 ```
@@ -440,15 +440,15 @@ resp = sa.Decode(raw, sa.EmbeddingsResponse)
 ```python
 raw = client.llm.rerank({
     "model": "rerank-model",
-    "query": "搜索查询",
-    "documents": ["文档1", "文档2"],
+    "query": "search query",
+    "documents": ["document 1", "document 2"],
 })
 resp = sa.Decode(raw, sa.RerankResponse)
 for r in resp.results:
     print(f"Index: {r.index}, Score: {r.relevance_score:.4f}")
 ```
 
-### 列出可用模型
+### List Available Models
 
 ```python
 raw = client.llm.list_models()
@@ -457,7 +457,7 @@ resp = sa.Decode(raw, sa.LLMModelListResponse)
 
 ---
 
-## 请求选项
+## Request Options
 
 ```python
 client.llm.chat_completions(
@@ -469,7 +469,7 @@ client.llm.chat_completions(
 
 ---
 
-## 错误处理
+## Error Handling
 
 ```python
 from seaart_sdk import SeaArtError
@@ -477,21 +477,21 @@ from seaart_sdk import SeaArtError
 try:
     task = client.modal.create(body)
 except SeaArtError as e:
-    if e.kind == sa.ERR_AUTH:        # 401/403 — API Key 无效
+    if e.kind == sa.ERR_AUTH:        # 401/403 — invalid API key
         ...
-    elif e.kind == sa.ERR_QUOTA:     # 429 — 超出频率限制
+    elif e.kind == sa.ERR_QUOTA:     # 429 — rate limit exceeded
         ...
-    elif e.kind == sa.ERR_TIMEOUT:   # 408/504 — 超时
+    elif e.kind == sa.ERR_TIMEOUT:   # 408/504 — timeout
         ...
-    elif e.kind == sa.ERR_NETWORK:   # 网络连接错误
+    elif e.kind == sa.ERR_NETWORK:   # Network connection error
         ...
-    elif e.kind == sa.ERR_TASK_FAILED:  # 任务执行失败
+    elif e.kind == sa.ERR_TASK_FAILED:  # Task execution failed
         print(e.task_id, e.message)
 ```
 
 ---
 
-## 完整示例：视频生成
+## Complete Examples: Video Generation
 
 ```python
 import seaart_sdk as sa
@@ -507,7 +507,7 @@ task = client.modal.create(
                 "params": {
                     "input": {
                         "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
-                        "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                        "prompt": "A dog and a girl playing happily in an autumn park",
                     },
                     "parameters": {
                         "resolution": "720P",
@@ -521,12 +521,12 @@ task = client.modal.create(
     }
 )
 
-print(f"任务已创建: {task.id}")
+print(f"Task created: {task.id}")
 
 task = task.wait(
-    sa.WithPollCallback(lambda s, p: print(f"\r进度: {p*100:.0f}%", end=""))
+    sa.WithPollCallback(lambda s, p: print(f"\rProgress: {p*100:.0f}%", end=""))
 )
 
 for url in task.urls():
-    print(f"\n视频 URL: {url}")
+    print(f"\nVideo URL: {url}")
 ```
