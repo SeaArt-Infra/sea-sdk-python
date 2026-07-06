@@ -295,7 +295,7 @@ resp = client.passthrough.request_raw(
 
 ## Image/Video Safety Scan
 
-The image/video safety scan endpoint is `POST /v1/image/scan`. It detects content-safety risks in images, GIFs, or videos. Provide either the media URL or base64 image content, and use `risk_types` to specify risk categories to detect.
+The image/video safety scan endpoint is `POST /v1/image/scan`. It detects content-safety risks in images or videos. Provide either a media URL or base64 image content, and use `risk_types` to specify risk categories to detect.
 
 **Image scan example**
 
@@ -309,8 +309,10 @@ result = client.modal.scan_image(
             sa.ImageScanRiskTypeViolent,
             sa.ImageScanRiskTypeChild,
         ],
-        detected_age=0,
-        is_video=0,
+        detected_age=False,
+        is_video=False,
+        canary="B",
+        scene="avatar",
     )
 )
 
@@ -321,25 +323,48 @@ for label in result.label_items:
 
 **Video scan example**
 
-Set `is_video=1` for video scans. If the video duration is known, pass `duration` for billing and statistics.
+Set `is_video=True` for video scans. Video scans must use `uri` and do not support `img_base64`. If the video duration is known, pass `duration` for billing and statistics.
 
 ```python
 result = client.modal.scan_image({
     "uri": "https://example.com/video.mp4",
     "risk_types": [sa.ImageScanRiskTypeErotic, sa.ImageScanRiskTypeViolent],
-    "is_video": 1,
+    "is_video": True,
     "duration": 12.5,
 })
+```
+
+Base64 image content is also supported for image scans:
+
+```python
+result = client.modal.scan_image(sa.ImageScanRequest(img_base64="base64-image-content"))
+```
+
+To process asynchronously, pass `callback_url`:
+
+```python
+result = client.modal.scan_image(
+    sa.ImageScanRequest(
+        uri="https://example.com/image.jpg",
+        callback_url="https://example.com/callback",
+        callback_context={"trace_id": "trace-123"},
+    )
+)
 ```
 
 **Request fields**
 
 | Field | Type | Required | Description |
 |------|------|------|------|
-| `uri` | `str` | Yes | Image, GIF, or video URL to scan |
-| `risk_types` | `list[str]` | No | Risk categories to detect. If empty, the gateway default strategy is used |
-| `detected_age` | `int` | No | Whether to enable age-group detection. `1` enables it and `0` disables it |
-| `is_video` | `int` | No | Whether the content is video. Images/GIFs use `0`; videos use `1` |
+| `uri` | `str` | Conditionally required | Image or video URL to scan. Mutually exclusive with `img_base64`; videos must use `uri` |
+| `img_base64` | `str` | Conditionally required | Base64-encoded image content. Mutually exclusive with `uri`; videos are not supported |
+| `is_video` | `bool` | No | Whether the file is a video. Defaults to `False` |
+| `callback_url` | `str` | Yes for async | Callback URL after detection completes. Only HTTP/HTTPS is supported. Passing this field enables async processing |
+| `callback_context` | `dict` | No | Caller passthrough fields. The server does not parse or modify them and returns them unchanged in the callback. Maximum 16KB |
+| `risk_types` | `list[str]` | No | Risk categories to detect. If omitted, all risk types are detected |
+| `detected_age` | `bool` | No | Whether to perform age detection. Defaults to `False` |
+| `canary` | `str` | No | Canary parameter. Defaults to `B` |
+| `scene` | `str` | No | Scene identifier used for label-level config lookup and metrics |
 | `duration` | `float` | No | Video duration in seconds. Recommended for video scans |
 
 **Response fields**

@@ -133,8 +133,13 @@ class ModalService:
         body = request.raw() if isinstance(request, ImageScanRequest) else request
         uri = str(body.get("uri", "")).strip()
         img_base64 = str(body.get("img_base64", "")).strip()
+        is_video = bool(body.get("is_video"))
         if not uri and not img_base64:
             raise SeaArtError(kind="general", message="uri or img_base64 is required")
+        if uri and img_base64:
+            raise SeaArtError(kind="general", message="uri and img_base64 are mutually exclusive")
+        if is_video and img_base64:
+            raise SeaArtError(kind="general", message="video scans require uri and do not support img_base64")
 
         request_options = build_request_options(options)
         status, payload = self._client.request(
