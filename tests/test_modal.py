@@ -289,8 +289,12 @@ class ModalServiceTests(unittest.TestCase):
             body = request_json(request)
             self.assertEqual(body["uri"], "https://example.com/image.jpg")
             self.assertEqual(body["risk_types"], ["EROTIC", "VIOLENT"])
-            self.assertEqual(body["detected_age"], 1)
-            self.assertEqual(body["is_video"], 0)
+            self.assertEqual(body["detected_age"], True)
+            self.assertEqual(body["is_video"], False)
+            self.assertEqual(body["callback_url"], "https://example.com/callback")
+            self.assertEqual(body["callback_context"], {"trace_id": "trace-scan"})
+            self.assertEqual(body["canary"], "B")
+            self.assertEqual(body["scene"], "avatar")
 
             return json_response(
                 200,
@@ -309,7 +313,12 @@ class ModalServiceTests(unittest.TestCase):
                 ImageScanRequest(
                     uri="https://example.com/image.jpg",
                     risk_types=[ImageScanRiskTypeErotic, ImageScanRiskTypeViolent],
-                    detected_age=1,
+                    detected_age=True,
+                    is_video=False,
+                    callback_url="https://example.com/callback",
+                    callback_context={"trace_id": "trace-scan"},
+                    canary="B",
+                    scene="avatar",
                 ),
                 WithHeader("X-Trace-Id", "trace-scan"),
             )
@@ -358,6 +367,7 @@ class ModalServiceTests(unittest.TestCase):
             body = request_json(request)
             self.assertNotIn("uri", body)
             self.assertEqual(body["img_base64"], "abc123")
+            self.assertEqual(body["is_video"], False)
             return json_response(200, {"ok": True, "usage": {"cost": "0.001"}})
 
         client = make_client()
@@ -365,6 +375,16 @@ class ModalServiceTests(unittest.TestCase):
             response = client.modal.scan_image(ImageScanRequest(img_base64="abc123"))
 
         self.assertTrue(response.ok)
+
+    def test_scan_image_rejects_uri_and_img_base64_together(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.scan_image(ImageScanRequest(uri="https://example.com/image.jpg", img_base64="abc123"))
+
+    def test_scan_image_rejects_video_with_img_base64(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.scan_image(ImageScanRequest(img_base64="abc123", is_video=True))
 
     def test_scan_image_requires_uri_or_img_base64(self) -> None:
         client = make_client()

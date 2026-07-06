@@ -87,21 +87,28 @@ class ImageScanRequest:
     """Request body for POST /v1/image/scan.
 
     Attributes:
-        uri: Image, GIF, or video URL to scan. Either uri or img_base64 is required.
-        img_base64: Base64-encoded image payload. Either uri or img_base64 is required.
-        risk_types: Safety categories to detect. Use ImageScanRiskTypePolity,
-            ImageScanRiskTypeErotic, ImageScanRiskTypeViolent, and/or ImageScanRiskTypeChild.
-        detected_age: Set to 1 to enable age-group detection; set to 0 to disable it.
-        is_video: Set to 1 when uri points to video content; images and GIFs use 0.
+        uri: Image, GIF, or video URL to scan. Required for video scans; otherwise uri or img_base64 is required.
+        img_base64: Base64-encoded image payload. Supported for image scans only; uri or img_base64 is required.
+        risk_types: Safety categories to detect. If empty, all risk types are detected.
+        detected_age: Whether to enable age-group detection. bool is preferred; 0/1 remains supported.
+        is_video: Whether the payload is a video. bool is preferred; 0/1 remains supported.
+        callback_url: HTTP/HTTPS callback URL. When provided, the request is processed asynchronously.
+        callback_context: Caller-defined passthrough object returned unchanged in the callback. Maximum 16KB.
+        canary: Canary routing parameter. Defaults to B on the gateway.
+        scene: Scene identifier used for label-level config lookup and metrics.
         duration: Video duration in seconds, used for video billing when known.
     """
 
     uri: str = ""
     risk_types: list[RiskType] = field(default_factory=list)
-    detected_age: int = 0
-    is_video: int = 0
+    detected_age: bool | int = False
+    is_video: bool | int = False
     duration: float = 0.0
     img_base64: str = ""
+    callback_url: str = ""
+    callback_context: dict[str, Any] | None = None
+    canary: str = ""
+    scene: str = ""
 
     def raw(self) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -115,6 +122,14 @@ class ImageScanRequest:
             body["img_base64"] = self.img_base64
         if self.duration:
             body["duration"] = self.duration
+        if self.callback_url:
+            body["callback_url"] = self.callback_url
+        if self.callback_context is not None:
+            body["callback_context"] = self.callback_context
+        if self.canary:
+            body["canary"] = self.canary
+        if self.scene:
+            body["scene"] = self.scene
         return body
 
 

@@ -253,7 +253,7 @@ print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 
 ### Image/Video Safety Scan
 
-Use `client.modal.scan_image` to call `model_base_url + /v1/image/scan`. Pass either `uri` or `img_base64`.
+Use `client.modal.scan_image` to call `model_base_url + /v1/image/scan`. Pass either `uri` or `img_base64`; videos must use `uri`.
 
 ```python
 result = client.modal.scan_image(
@@ -265,13 +265,15 @@ result = client.modal.scan_image(
             sa.ImageScanRiskTypeViolent,
             sa.ImageScanRiskTypeChild,
         ],
-        is_video=0,
+        is_video=False,
+        canary="B",
+        scene="avatar",
     )
 )
 print(result.ok, result.nsfw_level, result.risk_types)
 ```
 
-For video scans, set `is_video=1` and optionally pass `duration`; `frame_results` in the response contains frame-level scan results.
+For video scans, set `is_video=True` and optionally pass `duration`; `frame_results` in the response contains frame-level scan results. Video scans must use `uri`. For image scans, `img_base64` is also supported. Pass `callback_url` to enable async processing; `callback_context` is returned unchanged in the callback.
 
 Risk type descriptions:
 
