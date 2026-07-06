@@ -1,39 +1,39 @@
 # Sea Python SDK
 
-Sea AI 平台 Python SDK，用于通过统一网关调用多模态、LLM 和厂商透传能力。
+Sea AI Platform Python SDK for calling multimodal, LLM, and vendor passthrough capabilities through the unified gateway.
 
-特点：
+Features:
 
-- 纯标准库实现，无第三方运行时依赖
-- 保留原始请求透传能力
-- 支持 SSE 流式响应解析
-- 支持任务轮询和通用 task builder
+- Standard-library implementation with no third-party runtime dependencies
+- Preserves raw request passthrough capabilities
+- Supports SSE streaming response parsing
+- Supports task polling and a general task builder
 
-## 功能导航
+## Feature Navigation
 
-| 服务 | Client 字段 | 功能 |
+| Service | Client Field | Capability |
 |------|-------------|------|
-| [多模态 API](#多模态-api) | `client.modal` / `client.Modal` | 模型列表、参数详情、生成任务、预扣费查询和厂商透传 |
-| [图片/视频鉴黄](#图片视频鉴黄) | `client.modal.scan_image(...)` | 检测图片、GIF 或视频内容安全风险 |
-| [敏感词检测](#敏感词检测) | `client.modal.scan_text(...)` | 检测文本敏感词和组合词风险 |
-| [文本内容安全审核](#文本内容安全审核) | `client.modal.scan_text_content(...)` | 审核短文本内容安全风险等级和分类标签 |
-| [人脸检测](#人脸检测) | `client.modal.scan_face(...)` | 检测图片或视频中的人脸相关结果 |
-| [音频检测](#音频检测) | `client.modal.scan_audio(...)` | 检测音频内容风险 |
-| [LLM API](#llm-api) | `client.llm` / `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank 等兼容接口 |
+| [Multimodal API](#multimodal-api) | `client.modal` / `client.Modal` | Model listing, parameter details, generation tasks, precharge estimates, and vendor passthrough |
+| [Image/Video Safety Scan](#imagevideo-safety-scan) | `client.modal.scan_image(...)` | Detect content-safety risks in images, GIFs, or videos |
+| [Sensitive-Word Scan](#sensitive-word-scan) | `client.modal.scan_text(...)` | Detect sensitive words and combination-rule risks in text |
+| [Text Content Safety Scan](#text-content-safety-scan) | `client.modal.scan_text_content(...)` | Review short text risk level and category label |
+| [Face Scan](#face-scan) | `client.modal.scan_face(...)` | Detect face-related results in images or videos |
+| [Audio Scan](#audio-scan) | `client.modal.scan_audio(...)` | Detect audio content risks |
+| [LLM API](#llm-api) | `client.llm` / `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank compatible APIs |
 
-## 安装
+## Installation
 
-从 GitHub 安装最新代码：
+Install the latest code from GitHub:
 
 ```bash
 pip install --upgrade git+https://github.com/SeaArt-Infra/sea-sdk-python.git
 ```
 
-要求：
+Requirements:
 
 - Python 3.10+
 
-## 初始化
+## Initialization
 
 ```python
 import seaart_sdk as sa
@@ -45,7 +45,7 @@ client = sa.Client(
 )
 ```
 
-通过 `base_url` 配置统一网关地址，SDK 会基于该地址调用多模态、LLM 和透传等能力。
+Configure the unified gateway address through `base_url`. The SDK uses it to call multimodal, LLM, and passthrough capabilities.
 
 ```python
 client = sa.Client(
@@ -58,9 +58,9 @@ client = sa.Client(
 )
 ```
 
-## 多模态 API
+## Multimodal API
 
-### 模型列表和参数详情
+### Model List and Parameter Details
 
 ```python
 models = client.modal.list_models(
@@ -76,7 +76,7 @@ skill = client.modal.get_model_skill("alibaba_animate_anyone_detect")
 print(skill)
 ```
 
-`list_models` / `search_models` 支持的查询参数：
+`list_models` / `search_models` supports these query parameters:
 
 - `query` -> `q`
 - `input` -> `input`
@@ -85,11 +85,11 @@ print(skill)
 - `provider` -> `provider`
 - `limit` -> `limit`
 
-### 生成任务
+### Generation Tasks
 
-创建任务有两种常用方式：直接传入原始请求 dict，或使用 `NewTask` typed helper 构造请求体。两种方式最终都会调用 `client.modal.create(...)`。
+There are two common ways to create a task: pass a raw request dict, or use the `NewTask` typed helper to build the request body. Both ultimately call `client.modal.create(...)`.
 
-**方式一：直接传入原始请求 dict**
+**Option 1: Pass a raw request dict**
 
 ```python
 task = client.modal.create(
@@ -101,7 +101,7 @@ task = client.modal.create(
                 "params": {
                     "input": {
                         "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
-                        "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                        "prompt": "A dog and a girl playing happily in an autumn park",
                     },
                     "parameters": {
                         "resolution": "720P",
@@ -119,9 +119,9 @@ task = client.modal.create(
 print(task.id, task.status)
 ```
 
-`moderation` 为布尔类型，非必传；`True` 表示开白，`False` 表示非开白。
+`moderation` is a boolean and optional. `True` enables moderation allowlisting, while `False` disables it.
 
-**方式二：使用 Typed helper 构造请求体**
+**Option 2: Build the request body with the typed helper**
 
 ```python
 body = (
@@ -131,7 +131,7 @@ body = (
         {
             "input": {
                 "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
-                "prompt": "小狗和女孩在秋天的公园里快乐地玩耍",
+                "prompt": "A dog and a girl playing happily in an autumn park",
             },
             "parameters": {
                 "resolution": "720P",
@@ -148,9 +148,9 @@ body = (
 task = client.modal.create(body)
 ```
 
-`params` 用于传入模型参数，具体字段以对应模型的参数详情为准。
+`params` passes model parameters. The exact fields depend on the parameter details of the selected model.
 
-**轮询结果**
+**Poll results**
 
 ```python
 task = client.modal.wait(
@@ -162,19 +162,19 @@ task = client.modal.wait(
 print(task.status, task.progress, task.urls())
 ```
 
-也可以在创建任务后直接轮询结果：
+You can also poll results directly after creating a task:
 
 ```python
 task = client.modal.create({"model": "alibaba_wanx26_i2v_flash"})
 task = task.wait(sa.WithPollInterval(5.0))
 ```
 
-### 预扣费查询
+### Precharge Estimate
 
-预扣费查询请求参数与创建任务相同，可用于提前预估费用。
-和创建任务一样，预扣费查询也有两种常用方式：直接传入原始请求 dict，或使用 `NewTask` typed helper 构造请求体。两种方式最终都会调用 `client.modal.precharge(...)`。
+The precharge request uses the same parameters as task creation and can estimate costs in advance.
+Like task creation, precharge has two common request styles: pass a raw request dict, or build the body with the `NewTask` typed helper. Both ultimately call `client.modal.precharge(...)`.
 
-**方式一：直接传入原始请求 dict**
+**Option 1: Pass a raw request dict**
 
 ```python
 resp = client.modal.precharge(
@@ -196,7 +196,7 @@ print(resp.status)
 print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 ```
 
-**方式二：使用 Typed helper 构造请求体**
+**Option 2: Build the request body with the typed helper**
 
 ```python
 body = (
@@ -217,7 +217,7 @@ print(resp.status)
 print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 ```
 
-**响应示例**
+**Response example**
 
 ```json
 {
@@ -236,20 +236,20 @@ print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 }
 ```
 
-**字段说明**
+**Field descriptions**
 
-- `status`：查询状态，成功时为 `success`
-- `data.billing_model`：计费模型名
-- `data.cost`：预扣费金额
-- `data.currency`：币种
-- `data.discount`：折扣系数
-- `data.hash`：本次预扣费结果哈希
-- `data.model`：当前请求模型
-- `data.original_model`：原始模型名
-- `data.sample_count`：采样数量
-- `data.updated_at`：更新时间戳（毫秒）
+- `status`: Query status. Successful requests return `success`.
+- `data.billing_model`: Billing model name.
+- `data.cost`: Precharged amount.
+- `data.currency`: Currency.
+- `data.discount`: Discount factor.
+- `data.hash`: Hash of this precharge result.
+- `data.model`: Model in the current request.
+- `data.original_model`: Original model name.
+- `data.sample_count`: Sample count.
+- `data.updated_at`: Update timestamp in milliseconds.
 
-未匹配上预扣费数据时，可能返回：
+If no precharge data is matched, the response may be:
 
 ```json
 {
@@ -264,19 +264,19 @@ print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 }
 ```
 
-此时可重点关注：
+In this case, pay attention to:
 
-- `status`：这里会是 `failed`
-- `data.cost`：可能为 `null`
-- `data.reason`：失败原因，例如 `COST_CACHE_MISS`
+- `status`: This will be `failed`.
+- `data.cost`: May be `null`.
+- `data.reason`: Failure reason, such as `COST_CACHE_MISS`.
 
-### Passthrough API（厂商透传）
+### Passthrough API (Vendor Passthrough)
 
-Passthrough 层保留厂商原始 API 形态，属于多模态 API 下的厂商透传能力。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
+The passthrough layer preserves vendor-native API shapes and belongs to the vendor passthrough capability under the multimodal API. Paths must include a vendor prefix, such as `/kling/...`, `/vidu/...`, or `/google/...`.
 
-Passthrough 有两种常用方式：传入 JSON 对象，或完全透传原始请求体。
+Passthrough has two common modes: pass a JSON object, or fully pass through the raw request body.
 
-**方式一：传入 JSON 对象**
+**Option 1: Pass a JSON object**
 
 ```python
 resp = client.passthrough.post(
@@ -291,7 +291,7 @@ resp = client.passthrough.post(
 print(resp.status_code, resp.body.decode("utf-8"))
 ```
 
-**方式二：透传原始请求体**
+**Option 2: Pass through a raw request body**
 
 ```python
 resp = client.passthrough.request_raw(
@@ -301,7 +301,7 @@ resp = client.passthrough.request_raw(
 )
 ```
 
-当前还提供以下便捷方法：
+The following convenience methods are also available:
 
 - `request`
 - `request_raw`
@@ -310,11 +310,11 @@ resp = client.passthrough.request_raw(
 - `put`
 - `delete`
 
-## 图片/视频鉴黄
+## Image/Video Safety Scan
 
-图片/视频鉴黄接口对应 `POST /v1/image/scan`，用于对图片、GIF 或视频内容进行安全风险检测。调用时需要提供待检测媒体 URL，并通过 `risk_types` 指定需要检测的风险类型。
+The image/video safety scan endpoint is `POST /v1/image/scan`. It detects content-safety risks in images, GIFs, or videos. Provide the media URL and use `risk_types` to specify risk categories to detect.
 
-**图片检测示例**
+**Image scan example**
 
 ```python
 result = client.modal.scan_image(
@@ -336,9 +336,9 @@ for label in result.label_items:
     print(label.name, label.score, label.risk_type)
 ```
 
-**视频检测示例**
+**Video scan example**
 
-视频检测时设置 `is_video=1`。如果已知视频时长，建议传入 `duration`，用于计费和统计。
+Set `is_video=1` for video scans. If the video duration is known, pass `duration` for billing and statistics.
 
 ```python
 result = client.modal.scan_image({
@@ -349,28 +349,28 @@ result = client.modal.scan_image({
 })
 ```
 
-**请求字段**
+**Request fields**
 
-| 字段 | 类型 | 必填 | 说明 |
+| Field | Type | Required | Description |
 |------|------|------|------|
-| `uri` | `str` | 是 | 待检测图片、GIF 或视频 URL |
-| `risk_types` | `list[str]` | 否 | 指定检测风险类型；为空时按网关默认策略处理 |
-| `detected_age` | `int` | 否 | 是否启用年龄段检测，`1` 表示启用，`0` 表示关闭 |
-| `is_video` | `int` | 否 | 是否为视频内容，图片/GIF 为 `0`，视频为 `1` |
-| `duration` | `float` | 否 | 视频时长，单位秒；视频检测时建议传入 |
+| `uri` | `str` | Yes | Image, GIF, or video URL to scan |
+| `risk_types` | `list[str]` | No | Risk categories to detect. If empty, the gateway default strategy is used |
+| `detected_age` | `int` | No | Whether to enable age-group detection. `1` enables it and `0` disables it |
+| `is_video` | `int` | No | Whether the content is video. Images/GIFs use `0`; videos use `1` |
+| `duration` | `float` | No | Video duration in seconds. Recommended for video scans |
 
-**响应字段**
+**Response fields**
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `ok` | `bool` | 检测请求是否成功完成 |
-| `nsfw_level` | `int` | 最高风险等级，数值越高表示风险越高 |
-| `label_items` | `list` | 命中的具体标签，每项包含 `name`、`score`、`risk_type` |
-| `risk_types` | `list[str]` | 本次检测实际命中的风险类型 |
-| `frame_results` | `list` | 视频检测时的逐帧结果，图片检测通常为空 |
-| `usage` | `Usage` | 网关注入的计费信息 |
+| `ok` | `bool` | Whether the scan request completed successfully |
+| `nsfw_level` | `int` | Highest risk level. Higher values indicate higher risk |
+| `label_items` | `list` | Matched labels. Each item contains `name`, `score`, and `risk_type` |
+| `risk_types` | `list[str]` | Risk categories actually matched in this scan |
+| `frame_results` | `list` | Per-frame results for video scans. Usually empty for image scans |
+| `usage` | `Usage` | Gateway-injected billing metadata |
 
-**审核通过响应示例**
+**Pass response example**
 
 ```json
 {
@@ -384,7 +384,7 @@ result = client.modal.scan_image({
 }
 ```
 
-**命中风险响应示例**
+**Risk-hit response example**
 
 ```json
 {
@@ -392,22 +392,22 @@ result = client.modal.scan_image({
   "nsfw_level": 5,
   "label_items": [
     {
-      "name": "色情:女裸露:女上露点",
+      "name": "Erotic:female nudity:exposed nipples",
       "score": 5,
       "risk_type": "EROTIC"
     },
     {
       "risk_type": "EROTIC",
-      "name": "色情:裸露:臀部全裸",
+      "name": "Erotic:nudity:fully exposed buttocks",
       "score": 4
     },
     {
-      "name": "色情:裸露:下体全裸遮点",
+      "name": "Erotic:nudity:covered fully exposed genitals",
       "score": 4,
       "risk_type": "EROTIC"
     },
     {
-      "name": "色情:性暗示:大腿裸露",
+      "name": "Erotic:sexual suggestion:exposed thighs",
       "score": 1,
       "risk_type": "EROTIC"
     }
@@ -419,18 +419,18 @@ result = client.modal.scan_image({
 }
 ```
 
-风险类型说明：
+Risk type descriptions:
 
-| 常量 | 接口值 | 说明 |
+| Constant | API Value | Description |
 |------|--------|------|
-| `sa.ImageScanRiskTypePolity` | `POLITY` | 政治敏感、公共安全等风险内容 |
-| `sa.ImageScanRiskTypeErotic` | `EROTIC` | 色情、裸露、性暗示等成人内容 |
-| `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
-| `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
+| `sa.ImageScanRiskTypePolity` | `POLITY` | Political, public-safety, or related sensitive content |
+| `sa.ImageScanRiskTypeErotic` | `EROTIC` | Erotic, nudity, sexually suggestive, or other adult content |
+| `sa.ImageScanRiskTypeViolent` | `VIOLENT` | Violence, gore, weapons, harm, or related content |
+| `sa.ImageScanRiskTypeChild` | `CHILD` | Child-safety risks, especially unsafe or sexualized child-related content |
 
-## 敏感词检测
+## Sensitive-Word Scan
 
-敏感词检测接口对应 `POST /v1/text/scan`，用于检测提示词或普通文本中是否包含敏感内容。
+The sensitive-word scan endpoint is `POST /v1/text/scan`. It checks whether prompts or normal text contain sensitive content.
 
 ```python
 result = client.modal.scan_text(
@@ -449,30 +449,30 @@ print(result.data.sensitive_words)
 print(result.data.combination)
 ```
 
-**请求字段**
+**Request fields**
 
-| 字段 | 类型 | 必填 | 说明 |
+| Field | Type | Required | Description |
 |------|------|------|------|
-| `text` | `str` | 是 | 待检测文本 |
-| `scene` | `int` | 否 | 业务场景，由上游敏感词服务定义 |
-| `area_types` | `list[int]` | 否 | 区域规则集，支持 `All`、`Domestic`、`Foreign` |
-| `way` | `int` | 否 | 检测方式，支持字典、模型、混合、数字人等策略 |
+| `text` | `str` | Yes | Text to scan |
+| `scene` | `int` | No | Business scenario defined by the upstream sensitive-word service |
+| `area_types` | `list[int]` | No | Regional rule sets. Supports `All`, `Domestic`, and `Foreign` |
+| `way` | `int` | No | Checking strategy. Supports dictionary, model, mixed, digital-human, and other strategies |
 
-`area_types` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。
+`area_types` supports `TextScanAreaTypeAll`, `TextScanAreaTypeDomestic`, and `TextScanAreaTypeForeign`. `way` supports `TextScanWayDictionary`, `TextScanWayModel`, `TextScanWayMixed`, and `TextScanWayCharacter`.
 
-**响应字段**
+**Response fields**
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `data.sensitive_words` | `list` | 命中的敏感词列表，命中项包含 `word`、`start_index`、`end_index`、`risk_type_code` |
-| `data.combination` | `any` | 上游组合规则命中详情；未命中时通常为 `null` |
-| `data.is_sensitive` | `bool` | 文本是否命中敏感内容 |
-| `status.code` | `int` | 上游业务状态码，`10000` 表示成功 |
-| `status.msg` | `str` | 上游业务状态信息 |
-| `status.request_id` | `str` | 上游请求 ID |
-| `usage` | `Usage` | 网关注入的计费信息 |
+| `data.sensitive_words` | `list` | Matched sensitive words. Each item contains `word`, `start_index`, `end_index`, and `risk_type_code` |
+| `data.combination` | `any` | Upstream combination-rule match details. Usually `null` when there is no match |
+| `data.is_sensitive` | `bool` | Whether the text matched sensitive content |
+| `status.code` | `int` | Upstream business status code. `10000` means success |
+| `status.msg` | `str` | Upstream business status message |
+| `status.request_id` | `str` | Upstream request ID |
+| `usage` | `Usage` | Gateway-injected billing metadata |
 
-**审核通过响应示例**
+**Pass response example**
 
 ```json
 {
@@ -492,9 +492,9 @@ print(result.data.combination)
 }
 ```
 
-## 文本内容安全审核
+## Text Content Safety Scan
 
-文本内容安全审核接口对应 `POST /v1/text/content/scan`，用于对短文本进行内容安全审核，返回风险等级、分类标签和判定理由。该接口不影响旧敏感词检测接口 `POST /v1/text/scan`。
+The text content safety scan endpoint is `POST /v1/text/content/scan`. It reviews short text and returns the risk level, category label, and judgment reason. This endpoint does not affect the legacy sensitive-word scan endpoint `POST /v1/text/scan`.
 
 ```python
 result = client.modal.scan_text_content(
@@ -510,38 +510,38 @@ print(result.reason)
 print(result.usage)
 ```
 
-也可以直接传入原始请求 dict：
+You can also pass a raw request dict:
 
 ```python
 result = client.modal.scan_text_content(
     {
-        "text": "这是一段需要审核的文本",
+        "text": "This is a text snippet to review",
         "canary": "A",
         "scene": "seasoul",
     }
 )
 ```
 
-**请求字段**
+**Request fields**
 
-| 字段 | 类型 | 必填 | 说明 |
+| Field | Type | Required | Description |
 |------|------|------|------|
-| `text` | `str` | 是 | 待审核文本 |
-| `canary` | `str` | 否 | 灰度分支，`A` 表示外部 LLM API 失败降级 vLLM，`B` 表示本地 vLLM |
-| `scene` | `str` | 否 | 业务场景标识，例如 `user_name`、`bio`、`comment`、`seasoul` |
+| `text` | `str` | Yes | Text to review |
+| `canary` | `str` | No | Canary branch. `A` means external LLM API with vLLM fallback; `B` means local vLLM |
+| `scene` | `str` | No | Business scenario identifier, such as `user_name`, `bio`, `comment`, or `seasoul` |
 
-**响应字段**
+**Response fields**
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `ok` | `bool` | 是否审核成功 |
-| `level` | `int` | 风险等级，范围 `0-6`，数值越大风险越高 |
-| `label` | `str` | 分类标签，英文 |
-| `reason` | `str` | 判定理由，英文或错误原因 |
-| `usage` | `Usage` | 网关注入的计费信息，`usage.cost` 为本次调用费用 |
-| `extra` | `dict` | 上游返回的未建模字段 |
+| `ok` | `bool` | Whether the review succeeded |
+| `level` | `int` | Risk level from `0` to `6`; higher values indicate higher risk |
+| `label` | `str` | Category label in English |
+| `reason` | `str` | Judgment reason in English or error reason |
+| `usage` | `Usage` | Gateway-injected billing metadata. `usage.cost` is the cost of this call |
+| `extra` | `dict` | Upstream fields not modeled by the SDK |
 
-**审核通过响应示例**
+**Pass response example**
 
 ```json
 {
@@ -555,7 +555,7 @@ result = client.modal.scan_text_content(
 }
 ```
 
-**命中风险响应示例**
+**Risk-hit response example**
 
 ```json
 {
@@ -569,9 +569,9 @@ result = client.modal.scan_text_content(
 }
 ```
 
-## 人脸检测
+## Face Scan
 
-人脸检测接口对应 `POST /v1/face/scan`，用于检测图片或视频中的人脸相关结果。调用时可以传入媒体 URL，也可以传入图片 base64 内容。
+The face scan endpoint is `POST /v1/face/scan`. It detects face-related results in images or videos. You can pass either a media URL or base64 image content.
 
 ```python
 result = client.modal.scan_face(
@@ -586,44 +586,27 @@ print(result.ok, result.usage)
 print(result.extra)
 ```
 
-**请求字段**
+**Request fields**
 
-| 字段 | 类型 | 必填 | 说明 |
+| Field | Type | Required | Description |
 |------|------|------|------|
-| `uri` | `str` | 条件必填 | 待检测图片或视频 URL；`uri` 和 `img_base64` 至少传一个 |
-| `img_base64` | `str` | 条件必填 | 图片 base64 内容；`uri` 和 `img_base64` 至少传一个 |
-| `is_video` | `int` | 否 | 是否为视频内容，图片为 `0`，视频为 `1` |
-| `canary` | `str` | 否 | 灰度或路由标记，透传给上游服务 |
-| `scene` | `str` | 否 | 业务场景，透传给上游服务 |
-| `duration` | `float` | 否 | 视频时长，单位秒；视频检测时建议传入 |
+| `uri` | `str` | Conditionally required | Image or video URL to scan. At least one of `uri` and `img_base64` is required |
+| `img_base64` | `str` | Conditionally required | Base64-encoded image content. At least one of `uri` and `img_base64` is required |
+| `is_video` | `int` | No | Whether the content is video. Images use `0`; videos use `1` |
+| `canary` | `str` | No | Canary or routing marker forwarded to the upstream service |
+| `scene` | `str` | No | Business scenario forwarded to the upstream service |
+| `duration` | `float` | No | Video duration in seconds. Recommended for video scans |
 
-**响应字段**
+**Response fields**
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `ok` | `bool` | 检测请求是否成功完成 |
-| `error` | `str` | 上游业务错误信息；成功时通常为空 |
-| `usage` | `Usage` | 网关注入的计费信息 |
-| `extra` | `dict` | 上游返回的未建模字段，例如风险等级、标签、人脸数量等 |
+| `ok` | `bool` | Whether the scan request completed successfully |
+| `error` | `str` | Upstream business error message. Usually empty on success |
+| `usage` | `Usage` | Gateway-injected billing metadata |
+| `extra` | `dict` | Upstream fields not modeled by the SDK, such as risk level, labels, face count, and more |
 
-**不含人脸图片响应示例（SDK 返回结构）**
-
-```json
-{
-  "ok": true,
-  "error": "",
-  "usage": {
-    "cost": "1"
-  },
-  "extra": {
-    "nsfw_level": 0,
-    "label_items": [],
-    "risk_types": []
-  }
-}
-```
-
-**含人脸图片响应示例（SDK 返回结构）**
+**No-face image response example (SDK return structure)**
 
 ```json
 {
@@ -640,9 +623,26 @@ print(result.extra)
 }
 ```
 
-## 音频检测
+**Face image response example (SDK return structure)**
 
-音频检测接口对应 `POST /v1/audio/scan`，用于检测音频内容风险。调用时需要提供可访问的音频 URL，`duration` 用于计费和统计。
+```json
+{
+  "ok": true,
+  "error": "",
+  "usage": {
+    "cost": "1"
+  },
+  "extra": {
+    "nsfw_level": 0,
+    "label_items": [],
+    "risk_types": []
+  }
+}
+```
+
+## Audio Scan
+
+The audio scan endpoint is `POST /v1/audio/scan`. It detects risks in audio content. Provide an accessible audio URL. `duration` is used for billing and statistics.
 
 ```python
 result = client.modal.scan_audio(
@@ -659,36 +659,36 @@ for label in result.all_labels:
 print(result.extra)
 ```
 
-**请求字段**
+**Request fields**
 
-| 字段 | 类型 | 必填 | 说明 |
+| Field | Type | Required | Description |
 |------|------|------|------|
-| `uri` | `str` | 是 | 待检测音频 URL |
-| `rec_type` | `str` | 否 | 检测类型，由上游音频检测服务定义 |
-| `duration` | `float` | 否 | 音频时长，单位秒；建议传入以便计费和统计 |
+| `uri` | `str` | Yes | Audio URL to scan |
+| `rec_type` | `str` | No | Detection type defined by the upstream audio scan service |
+| `duration` | `float` | No | Audio duration in seconds. Recommended for billing and statistics |
 
-**响应字段**
+**Response fields**
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `risk_description` | `str` | 风险描述，对应响应字段 `riskDescription` |
-| `risk_level` | `str` | 风险等级，对应响应字段 `riskLevel` |
-| `all_labels` | `list` | 命中的标签列表，对应响应字段 `allLabels` |
-| `usage` | `Usage` | 网关注入的计费信息 |
-| `extra` | `dict` | 上游返回的未建模字段，例如错误码、请求 ID 等 |
+| `risk_description` | `str` | Risk description. Maps to response field `riskDescription` |
+| `risk_level` | `str` | Risk level. Maps to response field `riskLevel` |
+| `all_labels` | `list` | Matched label list. Maps to response field `allLabels` |
+| `usage` | `Usage` | Gateway-injected billing metadata |
+| `extra` | `dict` | Upstream fields not modeled by the SDK, such as error code, request ID, and more |
 
-**审核通过响应示例**
+**Pass response example**
 
 ```json
 {
   "code": 1100,
-  "message": "成功",
+  "message": "success",
   "requestId": "a63b89046c70435a4fb9a0d36439d0ee",
   "btId": "https://example.com/audio/sample.mp3",
   "detail": {
     "audioDetail": [],
     "audioTags": {},
-    "audioText": "示例音频转写文本",
+    "audioText": "sample audio transcription text",
     "audioTime": 4,
     "code": 1100,
     "requestParams": {},
@@ -699,7 +699,7 @@ print(result.extra)
 
 ## LLM API
 
-LLM 层保持“请求透传 + 原始响应返回”的形式：
+The LLM layer keeps the pattern of request passthrough plus raw response return:
 
 ```python
 raw = client.llm.chat_completions(
@@ -715,21 +715,21 @@ resp = sa.Decode(raw, sa.ChatCompletionResponse)
 print(resp.choices[0].message.content)
 ```
 
-当前支持的方法：
+Currently supported methods:
 
-| 方法 | 说明 |
+| Method | Description |
 |------|------|
-| `chat_completions` | 调用 OpenAI Chat Completions 兼容接口，返回原始响应字节 |
-| `chat_completions_stream` | 调用 Chat Completions 流式接口，返回可迭代的 SSE 流式事件 |
-| `messages` | 调用 Anthropic Messages 兼容接口，返回原始响应字节 |
-| `messages_stream` | 调用 Messages 流式接口，返回可迭代的 SSE 流式事件 |
-| `responses` | 调用 OpenAI Responses 兼容接口，返回原始响应字节 |
-| `responses_stream` | 调用 Responses 流式接口，返回可迭代的 SSE 流式事件 |
-| `rerank` | 调用文本重排接口 |
-| `embeddings` | 调用向量生成接口 |
-| `list_models` | 查询 LLM 模型列表 |
+| `chat_completions` | Calls an OpenAI Chat Completions-compatible API and returns raw response bytes |
+| `chat_completions_stream` | Calls the streaming Chat Completions API and returns iterable SSE stream events |
+| `messages` | Calls an Anthropic Messages-compatible API and returns raw response bytes |
+| `messages_stream` | Calls the streaming Messages API and returns iterable SSE stream events |
+| `responses` | Calls an OpenAI Responses-compatible API and returns raw response bytes |
+| `responses_stream` | Calls the streaming Responses API and returns iterable SSE stream events |
+| `rerank` | Calls the text reranking API |
+| `embeddings` | Calls the embedding generation API |
+| `list_models` | Queries the LLM model list |
 
-流式响应示例：
+Streaming response example:
 
 ```python
 stream = client.llm.chat_completions_stream(
