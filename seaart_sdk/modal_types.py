@@ -87,7 +87,8 @@ class ImageScanRequest:
     """Request body for POST /v1/image/scan.
 
     Attributes:
-        uri: Image, GIF, or video URL to scan.
+        uri: Image, GIF, or video URL to scan. Either uri or img_base64 is required.
+        img_base64: Base64-encoded image payload. Either uri or img_base64 is required.
         risk_types: Safety categories to detect. Use ImageScanRiskTypePolity,
             ImageScanRiskTypeErotic, ImageScanRiskTypeViolent, and/or ImageScanRiskTypeChild.
         detected_age: Set to 1 to enable age-group detection; set to 0 to disable it.
@@ -95,19 +96,23 @@ class ImageScanRequest:
         duration: Video duration in seconds, used for video billing when known.
     """
 
-    uri: str
+    uri: str = ""
     risk_types: list[RiskType] = field(default_factory=list)
     detected_age: int = 0
     is_video: int = 0
     duration: float = 0.0
+    img_base64: str = ""
 
     def raw(self) -> dict[str, Any]:
         body: dict[str, Any] = {
-            "uri": self.uri,
             "risk_types": self.risk_types,
             "detected_age": self.detected_age,
             "is_video": self.is_video,
         }
+        if self.uri:
+            body["uri"] = self.uri
+        if self.img_base64:
+            body["img_base64"] = self.img_base64
         if self.duration:
             body["duration"] = self.duration
         return body

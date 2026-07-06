@@ -312,7 +312,7 @@ The following convenience methods are also available:
 
 ## Image/Video Safety Scan
 
-The image/video safety scan endpoint is `POST /v1/image/scan`. It detects content-safety risks in images, GIFs, or videos. Provide the media URL and use `risk_types` to specify risk categories to detect.
+The image/video safety scan endpoint is `POST /v1/image/scan`. It detects content-safety risks in images, GIFs, or videos. Provide either the media URL or base64 image content, and use `risk_types` to specify risk categories to detect.
 
 **Image scan example**
 

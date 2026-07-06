@@ -253,7 +253,7 @@ print(resp.data.billing_model, resp.data.cost, resp.data.currency)
 
 ### Image/Video Safety Scan
 
-Use `client.modal.scan_image` to call `model_base_url + /v1/image/scan`.
+Use `client.modal.scan_image` to call `model_base_url + /v1/image/scan`. Pass either `uri` or `img_base64`.
 
 ```python
 result = client.modal.scan_image(

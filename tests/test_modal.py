@@ -352,10 +352,24 @@ class ModalServiceTests(unittest.TestCase):
         self.assertEqual(response.frame_results[0].frame_index, 3)
         self.assertEqual(response.frame_results[0].risk_types, ["VIOLENT"])
 
-    def test_scan_image_requires_uri(self) -> None:
+    def test_scan_image_accepts_img_base64(self) -> None:
+        def handler(request):
+            self.assertEqual(request_path(request), "/v1/image/scan")
+            body = request_json(request)
+            self.assertNotIn("uri", body)
+            self.assertEqual(body["img_base64"], "abc123")
+            return json_response(200, {"ok": True, "usage": {"cost": "0.001"}})
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_image(ImageScanRequest(img_base64="abc123"))
+
+        self.assertTrue(response.ok)
+
+    def test_scan_image_requires_uri_or_img_base64(self) -> None:
         client = make_client()
         with self.assertRaises(SeaArtError):
-            client.modal.scan_image(ImageScanRequest(uri=" "))
+            client.modal.scan_image(ImageScanRequest(uri=" ", img_base64=" "))
 
     def test_scan_face_posts_face_scan_request(self) -> None:
         def handler(request):
