@@ -710,6 +710,11 @@ class ModalServiceTests(unittest.TestCase):
         with self.assertRaises(SeaArtError):
             client.modal.scan_audio(AudioScanRequest(uri=" "))
 
+    def test_scan_audio_rejects_img_base64_raw_dict(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.scan_audio({"img_base64": "abc123", "rec_type": "custom"})
+
     def test_wait_completes(self) -> None:
         polls = {"count": 0}
 

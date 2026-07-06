@@ -222,9 +222,8 @@ class ModalService:
         """Scan audio through model_base_url + /v1/audio/scan."""
         body = request.raw() if isinstance(request, AudioScanRequest) else request
         uri = str(body.get("uri", "")).strip()
-        img_base64 = str(body.get("img_base64", "")).strip()
-        if not uri and not img_base64:
-            raise SeaArtError(kind="general", message="uri or img_base64 is required")
+        if not uri:
+            raise SeaArtError(kind="general", message="uri is required")
 
         request_options = build_request_options(options)
         status, payload = self._client.request(
