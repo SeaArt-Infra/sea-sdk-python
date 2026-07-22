@@ -325,6 +325,10 @@ print(result.reason, result.usage)
 
 `TextContentScanRequest` contains required `text` plus optional `canary` and `scene`. `TextContentScanResponse` contains `ok`, `level`, `label`, `reason`, `usage`, and unmodeled fields in `extra`.
 
+### Visual Structured Text Fusion Scan
+
+Use `client.modal.scan_visual_structured_text_fusion` for `POST /v1/visual/structured/text/fusion/scan`. It requires `text_dict` plus `uri` or `img_base64` and returns image/text risk details with gateway usage.
+
 ### Face Scan
 
 Use `client.modal.scan_face` to call `model_base_url + /v1/face/scan`. The gateway forwards the request to upstream `/cloud/face/scan`.

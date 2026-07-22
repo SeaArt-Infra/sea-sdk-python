@@ -17,6 +17,7 @@ Features:
 | [Image/Video Safety Scan](#imagevideo-safety-scan) | `client.modal.scan_image(...)` | Detect content-safety risks in images, GIFs, or videos |
 | [Sensitive-Word Scan](#sensitive-word-scan) | `client.modal.scan_text(...)` | Detect sensitive words and combination-rule risks in text |
 | [Text Content Safety Scan](#text-content-safety-scan) | `client.modal.scan_text_content(...)` | Review short text risk level and category label |
+| [Visual Structured Text Fusion Scan](#visual-structured-text-fusion-scan) | `client.modal.scan_visual_structured_text_fusion(...)` | Scan digital-human cover images and structured copy together |
 | [Face Scan](#face-scan) | `client.modal.scan_face(...)` | Detect face-related results in images or videos |
 | [Audio Scan](#audio-scan) | `client.modal.scan_audio(...)` | Detect audio content risks |
 | [LLM API](#llm-api) | `client.llm` / `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank compatible APIs |
@@ -593,6 +594,46 @@ result = client.modal.scan_text_content(
   }
 }
 ```
+
+## Visual Structured Text Fusion Scan
+
+The visual structured text fusion scan endpoint is `POST /v1/visual/structured/text/fusion/scan`. It evaluates a digital-human cover image together with structured copy. `text_dict` supports nested objects, and image URLs inside it are also scanned.
+
+```python
+result = client.modal.scan_visual_structured_text_fusion(
+    sa.VisualStructuredTextFusionScanRequest(
+        uri="https://example.com/cover.jpg",
+        text_dict={
+            "name": "Xiaomei",
+            "personality": "Gentle and considerate",
+            "description": "Enjoys traveling",
+            "greeting": "Hello",
+        },
+        business_type="v1",
+        canary="A",
+        mode="mixed",
+        ocr=1,
+    )
+)
+
+print(result.ok, result.nsfw_level, result.issue_source, result.risk_keys)
+print(result.reason, result.img_reason, result.text_reason)
+print(result.usage)
+```
+
+`text_dict` is required, and at least one of `uri` and `img_base64` must be provided. If both image inputs are provided, the downstream service prioritizes `img_base64`. Optional fields use downstream defaults when omitted. The downstream service may return HTTP 200 for business validation failures; check `result.ok`.
+
+| Field | Type | Required | Description |
+|------|------|------|------|
+| `text_dict` | `dict` | Yes | Structured copy, including nested objects and image URLs |
+| `img_base64` | `str` | Conditional | Main image base64 without a data URL prefix |
+| `uri` | `str` | Conditional | Public image URL or internal storage URI |
+| `business_type` | `str` | No | Image small-model business type; downstream default is `v1` |
+| `detected_age` | `int` | No | Known age; downstream default is `0` |
+| `hash_comparison` | `int` | No | Whether to enable hash comparison; downstream default is `0` |
+| `canary` | `str` | No | Canary group; downstream default is `A` |
+| `mode` | `str` | No | Detection mode; downstream default is `mixed` |
+| `ocr` | `int` | No | Whether to enable OCR; downstream default is `0` |
 
 ## Face Scan
 

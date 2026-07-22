@@ -22,6 +22,8 @@ from .modal_types import (
     Task,
     TextContentScanRequest,
     TextContentScanResponse,
+    VisualStructuredTextFusionScanRequest,
+    VisualStructuredTextFusionScanResponse,
     TextScanRequest,
     TextScanResponse,
     apply_poll_options,
@@ -218,6 +220,32 @@ class ModalService:
         if status >= 400:
             raise _http_error(status, payload)
         return decode(payload, TextContentScanResponse)
+
+    def scan_visual_structured_text_fusion(
+        self,
+        request: VisualStructuredTextFusionScanRequest | dict[str, object],
+        *options: RequestOption,
+    ) -> VisualStructuredTextFusionScanResponse:
+        """Scan a digital-human cover image and structured text together."""
+        body = request.raw() if isinstance(request, VisualStructuredTextFusionScanRequest) else request
+        text_dict = body.get("text_dict")
+        if not isinstance(text_dict, dict) or not text_dict:
+            raise SeaArtError(kind="general", message="text_dict is required")
+        uri = str(body.get("uri", "")).strip()
+        img_base64 = str(body.get("img_base64", "")).strip()
+        if not uri and not img_base64:
+            raise SeaArtError(kind="general", message="uri or img_base64 is required")
+
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "POST",
+            "/v1/visual/structured/text/fusion/scan",
+            body,
+            request_options.headers,
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        return decode(payload, VisualStructuredTextFusionScanResponse)
 
     def scan_audio(
         self,

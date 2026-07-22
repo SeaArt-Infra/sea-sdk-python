@@ -16,6 +16,7 @@ from seaart_sdk import (
     SeaArtError,
     Text,
     TextContentScanRequest,
+    VisualStructuredTextFusionScanRequest,
     TextScanAreaTypeForeign,
     TextScanRequest,
     TextScanWayDictionary,
@@ -659,6 +660,63 @@ class ModalServiceTests(unittest.TestCase):
         client = make_client()
         with self.assertRaises(SeaArtError):
             client.modal.scan_text_content(TextContentScanRequest(text=" "))
+
+    def test_scan_visual_structured_text_fusion_posts_request(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/visual/structured/text/fusion/scan")
+            body = request_json(request)
+            self.assertEqual(body["text_dict"]["name"], "小美")
+            self.assertEqual(body["uri"], "https://example.com/cover.jpg")
+            self.assertEqual(body["business_type"], "v1")
+            self.assertEqual(body["detected_age"], 0)
+            self.assertEqual(body["hash_comparison"], 1)
+            self.assertEqual(body["canary"], "A")
+            self.assertEqual(body["mode"], "mixed")
+            self.assertEqual(body["ocr"], 1)
+            return json_response(
+                200,
+                {
+                    "ok": True,
+                    "nsfw_level": 2,
+                    "reason": "detected risk",
+                    "img_reason": "adult content",
+                    "text_reason": "inappropriate words",
+                    "issue_source": "both",
+                    "risk_keys": ["description", "greeting"],
+                    "usage": {"cost": "0.001"},
+                    "request_id": "fusion-1",
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_visual_structured_text_fusion(
+                VisualStructuredTextFusionScanRequest(
+                    text_dict={"name": "小美", "greeting": "你好呀"},
+                    uri="https://example.com/cover.jpg",
+                    business_type="v1",
+                    detected_age=0,
+                    hash_comparison=1,
+                    canary="A",
+                    mode="mixed",
+                    ocr=1,
+                )
+            )
+
+        self.assertTrue(response.ok)
+        self.assertEqual(response.nsfw_level, 2)
+        self.assertEqual(response.issue_source, "both")
+        self.assertEqual(response.risk_keys, ["description", "greeting"])
+        self.assertEqual(response.usage.cost, "0.001")
+        self.assertEqual(response.extra["request_id"], "fusion-1")
+
+    def test_scan_visual_structured_text_fusion_requires_text_and_image(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.scan_visual_structured_text_fusion({"text_dict": {}})
+        with self.assertRaises(SeaArtError):
+            client.modal.scan_visual_structured_text_fusion({"uri": "https://example.com/cover.jpg"})
 
     def test_scan_audio_posts_audio_scan_request(self) -> None:
         def handler(request):

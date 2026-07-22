@@ -333,6 +333,59 @@ class TextContentScanResponse:
 
 
 @dataclass(slots=True)
+class VisualStructuredTextFusionScanRequest:
+    """Request body for POST /v1/visual/structured/text/fusion/scan."""
+
+    text_dict: dict[str, Any]
+    img_base64: str = ""
+    uri: str = ""
+    business_type: str = ""
+    detected_age: int | None = None
+    hash_comparison: int | None = None
+    canary: str = ""
+    mode: str = ""
+    ocr: int | None = None
+
+    def raw(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "text_dict": self.text_dict,
+        }
+        if self.img_base64:
+            body["img_base64"] = self.img_base64
+        if self.uri:
+            body["uri"] = self.uri
+        if self.business_type:
+            body["business_type"] = self.business_type
+        if self.detected_age is not None:
+            body["detected_age"] = self.detected_age
+        if self.hash_comparison is not None:
+            body["hash_comparison"] = self.hash_comparison
+        if self.canary:
+            body["canary"] = self.canary
+        if self.mode:
+            body["mode"] = self.mode
+        if self.ocr is not None:
+            body["ocr"] = self.ocr
+        return body
+
+
+@dataclass(slots=True)
+class VisualStructuredTextFusionScanResponse:
+    """Parsed response returned by POST /v1/visual/structured/text/fusion/scan."""
+
+    ok: bool = False
+    nsfw_level: int = 0
+    reason: str = ""
+    img_reason: str = ""
+    text_reason: str = ""
+    issue_source: str = ""
+    risk_keys: list[str] = field(default_factory=list)
+    msg: str = ""
+    usage: Usage | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class AudioScanRequest:
     """Request body for POST /v1/audio/scan.
 
