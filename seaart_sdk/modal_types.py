@@ -325,6 +325,7 @@ class TextContentScanResponse:
     """
 
     ok: bool = False
+    req_id: str = ""
     level: int = 0
     label: str = ""
     reason: str = ""
@@ -380,6 +381,7 @@ class VisualStructuredTextFusionScanResponse:
     text_reason: str = ""
     issue_source: str = ""
     risk_keys: list[str] = field(default_factory=list)
+    req_id: str = ""
     msg: str = ""
     usage: Usage | None = None
     extra: dict[str, Any] = field(default_factory=dict)

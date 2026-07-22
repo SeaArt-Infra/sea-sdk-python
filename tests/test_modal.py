@@ -601,11 +601,11 @@ class ModalServiceTests(unittest.TestCase):
                 200,
                 {
                     "ok": True,
+                    "req_id": "content-text-risk-1",
                     "level": 5,
                     "label": "pornography",
                     "reason": "Explicit sexual description",
                     "usage": {"cost": "0.001"},
-                    "request_id": "content-text-risk-1",
                 },
             )
 
@@ -621,12 +621,13 @@ class ModalServiceTests(unittest.TestCase):
             )
 
         self.assertTrue(response.ok)
+        self.assertEqual(response.req_id, "content-text-risk-1")
         self.assertEqual(response.level, 5)
         self.assertEqual(response.label, "pornography")
         self.assertEqual(response.reason, "Explicit sexual description")
         self.assertIsNotNone(response.usage)
         self.assertEqual(response.usage.cost, "0.001")
-        self.assertEqual(response.extra["request_id"], "content-text-risk-1")
+        self.assertNotIn("req_id", response.extra)
 
     def test_scan_text_content_accepts_raw_dict(self) -> None:
         def handler(request):
@@ -684,8 +685,8 @@ class ModalServiceTests(unittest.TestCase):
                     "text_reason": "inappropriate words",
                     "issue_source": "both",
                     "risk_keys": ["description", "greeting"],
+                    "req_id": "fusion-1",
                     "usage": {"cost": "0.001"},
-                    "request_id": "fusion-1",
                 },
             )
 
@@ -708,8 +709,9 @@ class ModalServiceTests(unittest.TestCase):
         self.assertEqual(response.nsfw_level, 2)
         self.assertEqual(response.issue_source, "both")
         self.assertEqual(response.risk_keys, ["description", "greeting"])
+        self.assertEqual(response.req_id, "fusion-1")
         self.assertEqual(response.usage.cost, "0.001")
-        self.assertEqual(response.extra["request_id"], "fusion-1")
+        self.assertNotIn("req_id", response.extra)
 
     def test_scan_visual_structured_text_fusion_requires_text_and_image(self) -> None:
         client = make_client()

@@ -320,14 +320,14 @@ result = client.modal.scan_text_content(
     )
 )
 print(result.ok, result.level, result.label)
-print(result.reason, result.usage)
+print(result.req_id, result.reason, result.usage)
 ```
 
-`TextContentScanRequest` contains required `text` plus optional `canary` and `scene`. `TextContentScanResponse` contains `ok`, `level`, `label`, `reason`, `usage`, and unmodeled fields in `extra`.
+`TextContentScanRequest` contains required `text` plus optional `canary` and `scene`. `TextContentScanResponse` contains `ok`, `req_id`, `level`, `label`, `reason`, `usage`, and unmodeled fields in `extra`. Log `req_id` for downstream request tracing.
 
 ### Visual Structured Text Fusion Scan
 
-Use `client.modal.scan_visual_structured_text_fusion` for `POST /v1/visual/structured/text/fusion/scan`. It requires `text_dict` plus `uri` or `img_base64` and returns image/text risk details with gateway usage.
+Use `client.modal.scan_visual_structured_text_fusion` for `POST /v1/visual/structured/text/fusion/scan`. It requires `text_dict` plus `uri` or `img_base64` and returns image/text risk details, downstream `req_id` for request tracing, and gateway usage.
 
 ### Face Scan
 
