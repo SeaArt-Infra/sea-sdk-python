@@ -515,7 +515,7 @@ result = client.modal.scan_text_content(
 )
 
 print(result.ok, result.level, result.label)
-print(result.reason)
+print(result.req_id, result.reason)
 print(result.usage)
 ```
 
@@ -544,6 +544,7 @@ result = client.modal.scan_text_content(
 | Field | Type | Description |
 |------|------|------|
 | `ok` | `bool` | Whether the review succeeded |
+| `req_id` | `str` | Downstream request ID for tracing; returned for successful reviews and downstream business validation failures |
 | `level` | `int` | Risk level from `0` to `6`; higher values indicate higher risk |
 | `label` | `str` | Category label in English |
 | `reason` | `str` | Judgment reason in English or error reason |
@@ -555,6 +556,7 @@ result = client.modal.scan_text_content(
 ```json
 {
   "ok": true,
+  "req_id": "da49eb3d0b4b4d2cb8a64d2c92d70f81",
   "level": 0,
   "label": "normal",
   "reason": "Neutral greeting expression",
@@ -569,6 +571,7 @@ result = client.modal.scan_text_content(
 ```json
 {
   "ok": true,
+  "req_id": "6d3597929be847589112510af59c5d2d",
   "level": 5,
   "label": "pornography",
   "reason": "Explicit sexual description",
@@ -600,7 +603,7 @@ result = client.modal.scan_visual_structured_text_fusion(
 )
 
 print(result.ok, result.nsfw_level, result.issue_source, result.risk_keys)
-print(result.reason, result.img_reason, result.text_reason)
+print(result.req_id, result.reason, result.img_reason, result.text_reason)
 print(result.usage)
 ```
 
@@ -617,6 +620,22 @@ print(result.usage)
 | `canary` | `str` | No | Canary group; downstream default is `A` |
 | `mode` | `str` | No | Detection mode; downstream default is `mixed` |
 | `ocr` | `int` | No | Whether to enable OCR; downstream default is `0` |
+
+**Response fields**
+
+| Field | Type | Description |
+|------|------|------|
+| `ok` | `bool` | Whether the downstream scan completed successfully |
+| `nsfw_level` | `int` | Highest risk level across the main image, image/text model, and linked images |
+| `reason` | `str` | Combined judgment reason or business validation error |
+| `img_reason` | `str` | Image-side risk reason |
+| `text_reason` | `str` | Text-side risk reason |
+| `issue_source` | `str` | Risk source: `img`, `text`, `both`, or `none` |
+| `risk_keys` | `list[str]` | `text_dict` fields that contain risk |
+| `req_id` | `str` | Downstream request ID for tracing, including business validation failures |
+| `msg` | `str` | Downstream service error message |
+| `usage` | `Usage` | Gateway-injected billing metadata |
+| `extra` | `dict` | Upstream fields not modeled by the SDK |
 
 ## Face Scan
 
