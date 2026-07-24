@@ -1,0 +1,4 @@
+interface:
+  display_name: "SeaArt Python SDK"
+  short_description: "Build SeaArt AI gateway integrations in Python"
+  default_prompt: "Use $seaart-sdk-py to implement a SeaArt Python SDK integration."
