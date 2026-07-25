@@ -7,6 +7,12 @@ description: Build and troubleshoot SeaArt AI gateway integrations with the seaa
 
 Use `seaart-sdk` to call the SeaArt unified gateway from Python 3.10+. Import it as `seaart_sdk as sa`. The SDK is synchronous and uses only the standard library.
 
+## Install
+
+```bash
+pip install --upgrade git+https://github.com/SeaArt-Infra/sea-sdk-python.git
+```
+
 ## Workflow
 
 1. Initialize one `sa.Client` with the API key and, when required, gateway URL.
