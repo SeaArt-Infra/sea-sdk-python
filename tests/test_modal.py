@@ -34,9 +34,10 @@ class ModalServiceTests(unittest.TestCase):
             self.assertEqual(request.get_method(), "POST")
             self.assertEqual(request_path(request), "/v1/generation")
             self.assertEqual(request_headers(request)["X-trace-id"], "trace-123")
+            self.assertEqual(request_headers(request)["X-model"], "alibaba_wanx26_i2v_flash")
             body = request_json(request)
             self.assertTrue(body["moderation"])
-            self.assertEqual(body["model"], "alibaba_wanx26_i2v_flash")
+            self.assertNotIn("model", body)
             self.assertEqual(
                 body["input"][0]["params"]["input"]["img_url"],
                 "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
@@ -105,9 +106,10 @@ class ModalServiceTests(unittest.TestCase):
         def handler(request):
             self.assertEqual(request.get_method(), "POST")
             self.assertEqual(request_path(request), "/v1/generation/precharge")
+            self.assertEqual(request_headers(request)["X-model"], "volces_seedream_4_5")
             body = request_json(request)
             self.assertEqual(body["id"], "d88pmute87128c73e9r0d0")
-            self.assertEqual(body["model"], "volces_seedream_4_5")
+            self.assertNotIn("model", body)
             self.assertFalse(body["moderation"])
             self.assertEqual(body["input"][0]["params"]["prompt"], "A dog")
             return json_response(

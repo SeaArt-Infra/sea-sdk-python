@@ -6,7 +6,7 @@ from typing import Iterator
 
 from .errors import ERR_GENERAL, ERR_NETWORK, SeaArtError, new_http_error
 from .llm_types import JSONMap, RawResponse, StreamEvent
-from .request_options import RequestOption, build_request_options
+from .request_options import RequestOption, build_request_options, move_model_to_header
 from .transport import TransportClient
 
 PATH_CHAT_COMPLETIONS = "/chat/completions"
@@ -66,7 +66,11 @@ class LLMService:
         *options: RequestOption,
     ) -> RawResponse:
         request_options = build_request_options(options)
-        status, payload = self._client.request(method, path, body, request_options.headers)
+        if body is None:
+            request_body, headers = body, request_options.headers
+        else:
+            request_body, headers = move_model_to_header(body, request_options.headers)
+        status, payload = self._client.request(method, path, request_body, headers)
         if status >= 400:
             raise _http_error(status, payload)
         return payload
@@ -79,7 +83,8 @@ class LLMService:
         *options: RequestOption,
     ) -> Iterator[StreamEvent]:
         request_options = build_request_options(options)
-        response = self._client.request_stream(method, path, body, request_options.headers)
+        request_body, headers = move_model_to_header(body, request_options.headers)
+        response = self._client.request_stream(method, path, request_body, headers)
         if response.status >= 400:
             payload = response.read()
             response.close()

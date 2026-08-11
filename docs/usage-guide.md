@@ -42,6 +42,8 @@ client = sa.Client(
 
 Usually you only need to configure `base_url`; the SDK uses the same gateway address to call multimodal, LLM, and vendor passthrough capabilities.
 
+Keep the selected model in the SDK payload's top-level `model` field. The SDK sends it as the `X-Model` header and removes it from the serialized JSON body. Do not pass `X-Model` with `sa.WithHeader(...)` when the payload already contains `model`.
+
 ---
 
 ## Multimodal API

@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
+from .errors import ERR_GENERAL, SeaArtError
+
 HeaderValue = str | Sequence[str]
 
 
@@ -39,3 +41,23 @@ def with_headers(headers: Mapping[str, HeaderValue]) -> RequestOption:
             options.headers[key] = values
 
     return apply
+
+
+def move_model_to_header(
+    body: Mapping[str, object], headers: Mapping[str, Sequence[str]]
+) -> tuple[dict[str, object], dict[str, list[str]]]:
+    """Move a request model from the JSON body to the gateway routing header."""
+    request_body = dict(body)
+    request_headers = {key: list(values) for key, values in headers.items()}
+
+    if "model" not in request_body:
+        return request_body, request_headers
+
+    model = request_body.pop("model")
+    if not isinstance(model, str) or not model.strip():
+        raise SeaArtError(kind=ERR_GENERAL, message="model must be a non-empty string")
+    if any(key.lower() == "x-model" for key in request_headers):
+        raise SeaArtError(kind=ERR_GENERAL, message="model and X-Model cannot both be set")
+
+    request_headers["X-Model"] = [model]
+    return request_body, request_headers
