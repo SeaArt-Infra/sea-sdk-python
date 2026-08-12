@@ -28,7 +28,7 @@ from .modal_types import (
     TextScanResponse,
     apply_poll_options,
 )
-from .request_options import RequestOption, build_request_options
+from .request_options import RequestOption, build_request_options, move_model_to_header
 from .serialization import decode
 from .transport import TransportClient
 
@@ -43,11 +43,12 @@ class ModalService:
 
     def create(self, body: dict[str, object], *options: RequestOption) -> Task:
         request_options = build_request_options(options)
+        request_body, headers = move_model_to_header(body, request_options.headers)
         status, payload = self._client.request(
             "POST",
             "/v1/generation",
-            body,
-            request_options.headers,
+            request_body,
+            headers,
         )
         if status >= 400:
             raise _http_error(status, payload)
@@ -65,11 +66,12 @@ class ModalService:
 
     def precharge(self, body: dict[str, object], *options: RequestOption) -> PrechargeResponse:
         request_options = build_request_options(options)
+        request_body, headers = move_model_to_header(body, request_options.headers)
         status, payload = self._client.request(
             "POST",
             "/v1/generation/precharge",
-            body,
-            request_options.headers,
+            request_body,
+            headers,
         )
         if status >= 400:
             raise _http_error(status, payload)

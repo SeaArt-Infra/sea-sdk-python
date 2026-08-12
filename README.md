@@ -59,6 +59,8 @@ client = sa.Client(
 )
 ```
 
+Keep the selected model in the SDK payload's top-level `model` field. The SDK sends it as the `X-Model` header and removes it from the serialized JSON body. Do not pass `X-Model` with `WithHeader(...)` when the payload already contains `model`.
+
 ## Multimodal API
 
 ### Model List and Parameter Details
@@ -880,6 +882,8 @@ client = sa.Client(
 ```
 
 Passing `base_url` derives `/model` and `/llm` service URLs. Override `model_base_url`, `llm_base_url`, or `passthrough_base_url` only when services use separate gateways. Do not expose API keys in source control or logs.
+
+Keep the selected model in the SDK payload's top-level `model` field. The SDK sends it as the `X-Model` header and removes it from the serialized JSON body. Do not pass `X-Model` with `sa.WithHeader(...)` when the payload already contains `model`.
 
 ## Multimodal Tasks
 

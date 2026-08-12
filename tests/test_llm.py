@@ -25,7 +25,8 @@ class LLMServiceTests(unittest.TestCase):
             self.assertEqual(request.get_method(), "POST")
             self.assertEqual(request_path(request), "/chat/completions")
             body = request_json(request)
-            self.assertEqual(body["model"], "gpt-4o-mini")
+            self.assertNotIn("model", body)
+            self.assertEqual(request_headers(request)["X-model"], "gpt-4o-mini")
             self.assertEqual(body["reasoning_effort"], "low")
             return json_response(
                 200,
@@ -43,15 +44,15 @@ class LLMServiceTests(unittest.TestCase):
             )
 
         client = make_client()
+        request = {
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 16,
+            "reasoning_effort": "low",
+        }
         with patch_urlopen(handler):
-            raw = client.llm.chat_completions(
-                {
-                    "model": "gpt-4o-mini",
-                    "messages": [{"role": "user", "content": "hi"}],
-                    "max_tokens": 16,
-                    "reasoning_effort": "low",
-                }
-            )
+            raw = client.llm.chat_completions(request)
+        self.assertEqual(request["model"], "gpt-4o-mini")
         response = Decode(raw, ChatCompletionResponse)
         self.assertEqual(response.choices[0].message.content, "hello")
 
@@ -69,6 +70,15 @@ class LLMServiceTests(unittest.TestCase):
         response = Decode(raw, LLMModelListResponse)
         self.assertEqual(response.data[0].id, "gpt-4o-mini")
 
+    def test_model_and_x_model_header_conflict_is_rejected(self) -> None:
+        client = make_client()
+        with patch_urlopen(lambda request: self.fail("urlopen should not be called")):
+            with self.assertRaisesRegex(SeaArtError, "model and X-Model cannot both be set"):
+                client.llm.chat_completions(
+                    {"model": "gpt-4o-mini", "messages": []},
+                    WithHeader("X-Model", "another-model"),
+                )
+
     def test_error_classification(self) -> None:
         def handler(request):
             return json_response(401, {"error": {"message": "invalid api key"}})
@@ -82,6 +92,8 @@ class LLMServiceTests(unittest.TestCase):
     def test_chat_completions_stream(self) -> None:
         def handler(request):
             body = request_json(request)
+            self.assertNotIn("model", body)
+            self.assertEqual(request_headers(request)["X-model"], "gpt-4o-mini")
             self.assertTrue(body["stream"])
             return sse_response(
                 "event: message\n",
@@ -189,7 +201,8 @@ class LLMServiceTests(unittest.TestCase):
     def test_embeddings(self) -> None:
         def handler(request):
             body = request_json(request)
-            self.assertEqual(body["model"], "text-embedding-3-small")
+            self.assertNotIn("model", body)
+            self.assertEqual(request_headers(request)["X-model"], "text-embedding-3-small")
             return json_response(
                 200,
                 {
