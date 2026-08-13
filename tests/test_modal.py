@@ -981,6 +981,26 @@ class ModalServiceTests(unittest.TestCase):
                 )
         self.assertEqual(context.exception.kind, ERR_TASK_FAILED)
 
+    def test_wait_failed_task_preserves_error_message_and_code(self) -> None:
+        def handler(request):
+            return json_response(
+                200,
+                {
+                    "id": "task_fail_details",
+                    "status": "failed",
+                    "error": {"code": 110001, "message": "input image may contain sensitive information"},
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            with self.assertRaises(SeaArtError) as context:
+                client.modal.wait("task_fail_details", WithPollInterval(0.01), WithPollTimeout(1.0))
+
+        self.assertEqual(context.exception.kind, ERR_TASK_FAILED)
+        self.assertEqual(context.exception.code, 110001)
+        self.assertEqual(context.exception.message, "task failed: input image may contain sensitive information")
+
     def test_task_builder_builds_generic_request(self) -> None:
         body = (
             NewTask("alibaba_wanx26_i2v_flash")
