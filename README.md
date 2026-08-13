@@ -14,6 +14,7 @@ Features:
 | Service | Client Field | Capability |
 |------|-------------|------|
 | [Multimodal API](#multimodal-api) | `client.modal` / `client.Modal` | Model listing, parameter details, generation tasks, precharge estimates, and vendor passthrough |
+| [ComfyUI Quick Apps](#comfyui-quick-apps) | `client.modal.create_comfyui_task(...)` | Query template parameters, create ComfyUI quick-app tasks, and poll results |
 | [Image/Video Safety Scan](#imagevideo-safety-scan) | `client.modal.scan_image(...)` | Detect content-safety risks in images, GIFs, or videos |
 | [Sensitive-Word Scan](#sensitive-word-scan) | `client.modal.scan_text(...)` | Detect sensitive words and combination-rule risks in text |
 | [Text Content Safety Scan](#text-content-safety-scan) | `client.modal.scan_text_content(...)` | Review short text risk level and category label |
@@ -170,6 +171,30 @@ You can also poll results directly after creating a task:
 ```python
 task = client.modal.create({"model": "alibaba_wanx26_i2v_flash"})
 task = task.wait(sa.WithPollInterval(5.0))
+```
+
+### ComfyUI Quick Apps
+
+Use the ComfyUI helpers for quick-app templates. Pass one or more `template_id` values to `list_comfyui_templates` to retrieve each template's input fields, allowed values, and defaults. `create_comfyui_task` always routes with `X-Model: comfyui` and builds the required `input[0].params` envelope; pass only the template ID, field values, and optional `high_memory`.
+
+```python
+templates = client.modal.list_comfyui_templates(["d32kq8le878c73876j5g"])
+for item in templates.templates[0].inputs:
+    print(item.field, item.required, item.constraints)
+
+task = client.modal.create_comfyui_task(
+    template_id="d32kq8le878c73876j5g",
+    inputs=[
+        sa.ComfyUIInput(
+            field="image",
+            value="https://image.cdn2.seaart.me/upload/input.webp",
+        ),
+        sa.ComfyUIInput(field="select", value=1),
+    ],
+    high_memory=True,
+)
+task = task.wait(sa.WithPollInterval(3.0), sa.WithPollTimeout(300.0))
+print(task.urls())
 ```
 
 ### Precharge Estimate
@@ -845,7 +870,7 @@ for event in stream:
 >
 ---
 name: seaart-sdk-py
-description: Build and troubleshoot SeaArt AI gateway integrations with the seaart-sdk Python client. Use when generating images or videos, searching model skills, estimating multimodal task cost, calling vendor-native passthrough APIs, running media or text safety scans, or using OpenAI- or Anthropic-compatible LLM, streaming, embedding, or rerank APIs.
+description: Build and troubleshoot SeaArt AI gateway integrations with the seaart-sdk Python client. Use when generating images or videos, calling ComfyUI quick-app templates, searching model skills, estimating multimodal task cost, calling vendor-native passthrough APIs, running media or text safety scans, or using OpenAI- or Anthropic-compatible LLM, streaming, embedding, or rerank APIs.
 ---
 
 # SeaArt Python SDK
@@ -918,6 +943,32 @@ print(task.urls())
 ```
 
 Use `client.modal.precharge(body)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `get_model_skill`.
+
+## ComfyUI Quick Apps
+
+Retrieve the specification for the supplied `template_id` values before collecting user values. It identifies each template's required fields, input types, allowed values, and defaults. Use `create_comfyui_task` rather than manually constructing the generation body: the SDK fixes the model to `comfyui`, sends it as `X-Model`, and builds `input[0].params`.
+
+```python
+templates = client.modal.list_comfyui_templates(["d32kq8le878c73876j5g"])
+for item in templates.templates[0].inputs:
+    print(item.field, item.required, item.constraints)
+
+task = client.modal.create_comfyui_task(
+    template_id="d32kq8le878c73876j5g",
+    inputs=[
+        sa.ComfyUIInput(
+            field="image",
+            value="https://image.cdn2.seaart.me/upload/input.webp",
+        ),
+        sa.ComfyUIInput(field="select", value=1),
+    ],
+    high_memory=True,
+)
+task = task.wait(sa.WithPollInterval(3.0), sa.WithPollTimeout(300.0))
+print(task.urls())
+```
+
+Pass `node_id` in `sa.ComfyUIInput` when a template requires it. `inputs` also accepts equivalent dictionaries with `field` and `value` keys.
 
 ## LLM And Streaming APIs
 
