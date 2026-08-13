@@ -139,6 +139,30 @@ body = (
 task = client.modal.create(body)
 ```
 
+### ComfyUI Quick Apps
+
+Use the dedicated helpers for ComfyUI quick-app templates. Query one or more `template_id` values first to discover each template's required fields and constraints, then submit only `template_id`, `inputs`, and optional `high_memory`; the SDK fixes the model to `comfyui` and builds the gateway request envelope.
+
+```python
+templates = client.modal.list_comfyui_templates(["d32kq8le878c73876j5g"])
+for item in templates.templates[0].inputs:
+    print(item.field, item.required, item.constraints)
+
+task = client.modal.create_comfyui_task(
+    template_id="d32kq8le878c73876j5g",
+    inputs=[
+        sa.ComfyUIInput(
+            field="image",
+            value="https://image.cdn2.seaart.me/upload/input.webp",
+        ),
+        sa.ComfyUIInput(field="select", value=1),
+    ],
+    high_memory=True,
+)
+```
+
+Pass `node_id` in `sa.ComfyUIInput` when the template requires it. `inputs` also accepts equivalent dictionaries with `field` and `value` keys.
+
 ### Wait for Task Completion
 
 ```python

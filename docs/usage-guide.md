@@ -160,6 +160,30 @@ for output in task.output:
         print(f"Type: {content.type}, URL: {content.url}")
 ```
 
+### ComfyUI Quick Apps
+
+Pass one or more `template_id` values to `list_comfyui_templates` to retrieve the corresponding quick-app template input fields and constraints. `create_comfyui_task` fixes the model to `comfyui` and builds the required request envelope, so callers provide only `template_id`, `inputs`, and optional `high_memory`.
+
+```python
+templates = client.modal.list_comfyui_templates(["d32kq8le878c73876j5g"])
+for item in templates.templates[0].inputs:
+    print(item.field, item.required, item.constraints)
+
+task = client.modal.create_comfyui_task(
+    template_id="d32kq8le878c73876j5g",
+    inputs=[
+        sa.ComfyUIInput(
+            field="image",
+            value="https://image.cdn2.seaart.me/upload/input.webp",
+        ),
+        sa.ComfyUIInput(field="select", value=1),
+    ],
+    high_memory=True,
+)
+task = task.wait(sa.WithPollInterval(3.0), sa.WithPollTimeout(300.0))
+print(task.urls())
+```
+
 ### Precharge Estimate
 
 The precharge request uses the same parameters as task creation and can estimate costs in advance.
