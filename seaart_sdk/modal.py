@@ -10,6 +10,8 @@ from .modal_types import (
     APIError,
     AudioScanRequest,
     AudioScanResponse,
+    ComfyUIInput,
+    ComfyUITemplateSpecsResponse,
     FaceScanRequest,
     FaceScanResponse,
     GenerationResponse,
@@ -76,6 +78,64 @@ class ModalService:
         if status >= 400:
             raise _http_error(status, payload)
         return decode(payload, PrechargeResponse)
+
+    def create_comfyui_task(
+        self,
+        template_id: str,
+        inputs: list[ComfyUIInput | dict[str, object]],
+        high_memory: bool | None = None,
+        *options: RequestOption,
+    ) -> Task:
+        """Create a ComfyUI quick-app task with the gateway-required request shape."""
+        template_id = template_id.strip()
+        if not template_id:
+            raise SeaArtError(kind="general", message="template_id is required")
+        if not inputs:
+            raise SeaArtError(kind="general", message="inputs is required")
+
+        raw_inputs: list[dict[str, object]] = []
+        for item in inputs:
+            if isinstance(item, ComfyUIInput):
+                raw_input = item.raw()
+            elif isinstance(item, dict):
+                raw_input = dict(item)
+            else:
+                raise SeaArtError(
+                    kind="general",
+                    message="inputs must contain ComfyUIInput or dict values",
+                )
+            field = raw_input.get("field")
+            if not isinstance(field, str) or not field.strip():
+                raise SeaArtError(kind="general", message="each ComfyUI input requires field")
+            if "value" not in raw_input:
+                raise SeaArtError(kind="general", message="each ComfyUI input requires value")
+            raw_inputs.append(raw_input)
+
+        params: dict[str, object] = {"template_id": template_id, "inputs": raw_inputs}
+        if high_memory is not None:
+            params["high_memory"] = high_memory
+        return self.create({"model": "comfyui", "input": [{"params": params}]}, *options)
+
+    def list_comfyui_templates(
+        self,
+        template_ids: list[str] | None = None,
+        *options: RequestOption,
+    ) -> ComfyUITemplateSpecsResponse:
+        """Return parameter specifications for the supplied ComfyUI template IDs."""
+        body: dict[str, object] = {"type": "comfyui"}
+        if template_ids is not None:
+            body["template_ids"] = template_ids
+
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "POST",
+            "/v1/template/specs",
+            body,
+            request_options.headers,
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        return decode(payload, ComfyUITemplateSpecsResponse)
 
     def list_models(self, params: ModelSearchParams | None = None, *options: RequestOption) -> ModelSearchResponse:
         """Search multimodal model skills via GET /v1/models/skill/search.

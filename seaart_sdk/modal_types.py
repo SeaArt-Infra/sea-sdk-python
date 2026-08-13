@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, field as dataclass_field
 from typing import Any
 
 from .errors import ERR_GENERAL, SeaArtError
@@ -570,6 +570,68 @@ class ModelSearchResponse:
     total_pages: int = field(default=0, metadata={"json": "totalPages"})
     page: int = 0
     hits_per_page: int = field(default=0, metadata={"json": "hitsPerPage"})
+
+
+@dataclass(slots=True)
+class ComfyUIInput:
+    """One value supplied to a ComfyUI quick-app template field."""
+
+    field: str
+    value: Any
+    node_id: str = ""
+
+    def raw(self) -> dict[str, Any]:
+        body: dict[str, Any] = {"field": self.field, "value": self.value}
+        if self.node_id:
+            body["node_id"] = self.node_id
+        return body
+
+
+@dataclass(slots=True)
+class ComfyUITemplateInput:
+    """One input definition returned by a ComfyUI quick-app template."""
+
+    field: str = ""
+    node_id: str = ""
+    node_type: str = ""
+    type: str = ""
+    required: bool = False
+    description: str = ""
+    parameter_type: int = 0
+    parameter_value_type: int = 0
+    constraints: dict[str, Any] = dataclass_field(default_factory=dict)
+    extra: dict[str, Any] = dataclass_field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class ComfyUITemplateOutput:
+    """One output definition returned by a ComfyUI quick-app template."""
+
+    node_id: str = ""
+    node_type: str = ""
+    extra: dict[str, Any] = dataclass_field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class ComfyUITemplate:
+    """ComfyUI quick-app template metadata and its input/output definitions."""
+
+    template_id: str = ""
+    template_name: str = ""
+    description: str = ""
+    version: str = ""
+    inputs: list[ComfyUITemplateInput] = dataclass_field(default_factory=list)
+    outputs: list[ComfyUITemplateOutput] = dataclass_field(default_factory=list)
+    extra: dict[str, Any] = dataclass_field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class ComfyUITemplateSpecsResponse:
+    """Response returned by POST /v1/template/specs for ComfyUI quick apps."""
+
+    type: str = ""
+    templates: list[ComfyUITemplate] = dataclass_field(default_factory=list)
+    extra: dict[str, Any] = dataclass_field(default_factory=dict)
 
 
 @dataclass(slots=True)

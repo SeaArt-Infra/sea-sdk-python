@@ -7,6 +7,7 @@ from seaart_sdk import (
     ERR_TASK_FAILED,
     FaceScanRequest,
     AudioScanRequest,
+    ComfyUIInput,
     ImageScanRequest,
     ImageScanRiskTypeErotic,
     ImageScanRiskTypeViolent,
@@ -101,6 +102,99 @@ class ModalServiceTests(unittest.TestCase):
         self.assertEqual(task.status, "completed")
         self.assertEqual(task.progress, 1.0)
         self.assertEqual(task.urls(), ["https://example.com/out.mp4"])
+
+    def test_create_comfyui_task_builds_fixed_request_shape(self) -> None:
+        raw_input = {"field": "select", "value": 1}
+
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/generation")
+            self.assertEqual(request_headers(request)["X-model"], "comfyui")
+            body = request_json(request)
+            self.assertNotIn("model", body)
+            self.assertEqual(
+                body,
+                {
+                    "input": [
+                        {
+                            "params": {
+                                "template_id": "d32kq8le878c73876j5g",
+                                "high_memory": True,
+                                "inputs": [
+                                    {
+                                        "field": "image",
+                                        "value": "https://example.com/input.webp",
+                                        "node_id": "10",
+                                    },
+                                    {"field": "select", "value": 1},
+                                ],
+                            }
+                        }
+                    ]
+                },
+            )
+            return json_response(200, {"id": "task_comfyui", "status": "in_progress", "model": "comfyui"})
+
+        client = make_client()
+        with patch_urlopen(handler):
+            task = client.modal.create_comfyui_task(
+                "d32kq8le878c73876j5g",
+                [
+                    ComfyUIInput(
+                        field="image",
+                        value="https://example.com/input.webp",
+                        node_id="10",
+                    ),
+                    raw_input,
+                ],
+                high_memory=True,
+            )
+
+        self.assertEqual(task.id, "task_comfyui")
+        self.assertEqual(raw_input, {"field": "select", "value": 1})
+
+    def test_list_comfyui_templates_decodes_specs(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/template/specs")
+            self.assertEqual(request_json(request), {"type": "comfyui", "template_ids": ["d595lcle878btf8lbq2g"]})
+            return json_response(
+                200,
+                {
+                    "type": "comfyui",
+                    "templates": [
+                        {
+                            "template_id": "d595lcle878btf8lbq2g",
+                            "template_name": "ReV Animated",
+                            "description": "ComfyUI quick app",
+                            "version": "d595lcle878btf8lbq30",
+                            "inputs": [
+                                {
+                                    "field": "seed",
+                                    "node_id": "3",
+                                    "node_type": "KSampler",
+                                    "type": "integer",
+                                    "required": True,
+                                    "description": "Seed",
+                                    "parameter_type": 7,
+                                    "parameter_value_type": 2,
+                                    "constraints": {"max": 18446744073709552000, "default": 1070093600316061},
+                                }
+                            ],
+                            "outputs": [{"node_id": "9", "node_type": "SaveImage"}],
+                        }
+                    ],
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.list_comfyui_templates(["d595lcle878btf8lbq2g"])
+
+        self.assertEqual(response.type, "comfyui")
+        self.assertEqual(response.templates[0].inputs[0].field, "seed")
+        self.assertEqual(response.templates[0].inputs[0].constraints["max"], 18446744073709552000)
+        self.assertEqual(response.templates[0].outputs[0].node_type, "SaveImage")
 
     def test_precharge_returns_billing_preview(self) -> None:
         def handler(request):
