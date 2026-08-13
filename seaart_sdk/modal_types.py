@@ -11,9 +11,10 @@ from .errors import ERR_GENERAL, SeaArtError
 class APIError:
     code: int = 0
     error_message: str = ""
+    message: str = ""
 
     def __str__(self) -> str:
-        return self.error_message or "unknown API error"
+        return self.error_message or self.message or "unknown API error"
 
 
 RiskType = str

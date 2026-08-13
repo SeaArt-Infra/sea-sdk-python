@@ -16,6 +16,7 @@ class SeaArtError(Exception):
     message: str
     status: int | None = None
     task_id: str | None = None
+    code: int | str | None = None
 
     def __str__(self) -> str:
         if self.task_id:

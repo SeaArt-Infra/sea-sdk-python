@@ -173,6 +173,15 @@ task = client.modal.create({"model": "alibaba_wanx26_i2v_flash"})
 task = task.wait(sa.WithPollInterval(5.0))
 ```
 
+When a task fails, `wait()` raises `SeaArtError` with `kind`, `task_id`, the gateway error `code`, and the complete gateway error `message`.
+
+```python
+try:
+    task = task.wait(sa.WithPollTimeout(300.0))
+except sa.SeaArtError as exc:
+    print(exc.kind, exc.code, exc.message, exc.task_id)
+```
+
 ### ComfyUI Quick Apps
 
 Use the ComfyUI helpers for quick-app templates. Pass one or more `template_id` values to `list_comfyui_templates` to retrieve each template's input fields, allowed values, and defaults. `create_comfyui_task` always routes with `X-Model: comfyui` and builds the required `input[0].params` envelope; pass only the template ID, field values, and optional `high_memory`.

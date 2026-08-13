@@ -370,9 +370,14 @@ class ModalService:
                 return task
             if status == STATUS_FAILED:
                 message = "task failed"
-                if isinstance(task.error, APIError) and task.error.error_message:
-                    message = f"task failed: {task.error.error_message}"
-                raise SeaArtError(kind=ERR_TASK_FAILED, message=message, task_id=task_id)
+                code: int | None = None
+                if isinstance(task.error, APIError):
+                    detail = task.error.error_message or task.error.message
+                    if detail:
+                        message = f"task failed: {detail}"
+                    if task.error.code:
+                        code = task.error.code
+                raise SeaArtError(kind=ERR_TASK_FAILED, message=message, task_id=task_id, code=code)
 
             time.sleep(config.interval)
 
@@ -426,6 +431,9 @@ def _http_error(status: int, payload: bytes) -> SeaArtError:
 
     if isinstance(parsed, dict):
         error_payload = parsed.get("error")
-        if isinstance(error_payload, dict) and error_payload.get("error_message"):
-            message = str(error_payload["error_message"])
+        if isinstance(error_payload, dict):
+            if error_payload.get("error_message"):
+                message = str(error_payload["error_message"])
+            elif error_payload.get("message"):
+                message = str(error_payload["message"])
     return new_http_error(status, message)
