@@ -78,7 +78,7 @@ class Usage:
     total_tokens: int | None = None
 
     def cost_float64(self) -> float:
-        if self.cost is None:
+        if self.cost is None or self.cost == "":
             return 0.0
         return float(self.cost)
 

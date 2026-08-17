@@ -21,6 +21,7 @@ from seaart_sdk import (
     TextScanAreaTypeForeign,
     TextScanRequest,
     TextScanWayDictionary,
+    Usage,
     WithHeader,
     WithPollInterval,
     WithPollTimeout,
@@ -30,6 +31,10 @@ from test_helpers import FakeResponse, json_response, make_client, patch_urlopen
 
 
 class ModalServiceTests(unittest.TestCase):
+    def test_usage_cost_float64_accepts_empty_string(self) -> None:
+        self.assertEqual(Usage(cost="").cost_float64(), 0.0)
+        self.assertEqual(Usage(cost="0.01429").cost_float64(), 0.01429)
+
     def test_create_submits_raw_body(self) -> None:
         def handler(request):
             self.assertEqual(request.get_method(), "POST")
@@ -1000,6 +1005,27 @@ class ModalServiceTests(unittest.TestCase):
         self.assertEqual(context.exception.kind, ERR_TASK_FAILED)
         self.assertEqual(context.exception.code, 110001)
         self.assertEqual(context.exception.message, "task failed: input image may contain sensitive information")
+
+    def test_wait_failed_task_accepts_empty_usage_cost(self) -> None:
+        def handler(request):
+            return json_response(
+                200,
+                {
+                    "id": "task_fail_empty_cost",
+                    "status": "failed",
+                    "error": {"code": 190000, "message": "download input audio failed"},
+                    "usage": {"cost": ""},
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            with self.assertRaises(SeaArtError) as context:
+                client.modal.wait("task_fail_empty_cost", WithPollInterval(0.01), WithPollTimeout(1.0))
+
+        self.assertEqual(context.exception.kind, ERR_TASK_FAILED)
+        self.assertEqual(context.exception.code, 190000)
+        self.assertEqual(context.exception.message, "task failed: download input audio failed")
 
     def test_task_builder_builds_generic_request(self) -> None:
         body = (
