@@ -3,6 +3,7 @@ from .client import (
     DEFAULT_LLM_BASE_URL,
     DEFAULT_MODEL_BASE_URL,
     DEFAULT_PASSTHROUGH_BASE_URL,
+    DEFAULT_BILLING_BASE_URL,
     DEFAULT_TIMEOUT,
     SDK_VERSION,
     Client,
@@ -119,6 +120,8 @@ from .modal_types import (
     with_poll_timeout,
 )
 from .passthrough import PassthroughResponse, PassthroughService
+from .billing import BillingService
+from .billing_types import BillingItem, BillingPage, BillingQuery, BillingResponse, BillingSummary
 from .request_options import RequestOption, with_header, with_headers
 from .serialization import decode
 
@@ -180,6 +183,13 @@ __all__ = [
     "DEFAULT_LLM_BASE_URL",
     "DEFAULT_MODEL_BASE_URL",
     "DEFAULT_PASSTHROUGH_BASE_URL",
+    "DEFAULT_BILLING_BASE_URL",
+    "BillingItem",
+    "BillingPage",
+    "BillingQuery",
+    "BillingResponse",
+    "BillingService",
+    "BillingSummary",
     "DEFAULT_TIMEOUT",
     "Decode",
     "EmbeddingObject",

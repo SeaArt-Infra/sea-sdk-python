@@ -4,6 +4,7 @@ import unittest
 
 from seaart_sdk import (
     DEFAULT_BASE_URL,
+    DEFAULT_BILLING_BASE_URL,
     DEFAULT_LLM_BASE_URL,
     DEFAULT_MODEL_BASE_URL,
     DEFAULT_PASSTHROUGH_BASE_URL,
@@ -20,6 +21,7 @@ class ClientInitTests(unittest.TestCase):
         self.assertEqual(client.model_base_url, DEFAULT_MODEL_BASE_URL)
         self.assertEqual(client.llm_base_url, DEFAULT_LLM_BASE_URL)
         self.assertEqual(client.passthrough_base_url, DEFAULT_PASSTHROUGH_BASE_URL)
+        self.assertEqual(client.billing_base_url, DEFAULT_BILLING_BASE_URL)
 
     def test_derives_service_base_urls_from_base_url(self) -> None:
         client = Client(ClientConfig(api_key="test-key", base_url="https://gateway.example.com/"))
@@ -27,6 +29,7 @@ class ClientInitTests(unittest.TestCase):
         self.assertEqual(client.model_base_url, "https://gateway.example.com/model")
         self.assertEqual(client.llm_base_url, "https://gateway.example.com/llm")
         self.assertEqual(client.passthrough_base_url, "https://gateway.example.com/model")
+        self.assertEqual(client.billing_base_url, "https://gateway.example.com/monitor")
 
     def test_service_base_url_overrides(self) -> None:
         client = Client(
@@ -36,11 +39,13 @@ class ClientInitTests(unittest.TestCase):
                 model_base_url="https://model.example.com",
                 llm_base_url="https://llm.example.com",
                 passthrough_base_url="https://passthrough.example.com",
+                billing_base_url="https://billing.example.com",
             )
         )
         self.assertEqual(client.model_base_url, "https://model.example.com")
         self.assertEqual(client.llm_base_url, "https://llm.example.com")
         self.assertEqual(client.passthrough_base_url, "https://passthrough.example.com")
+        self.assertEqual(client.billing_base_url, "https://billing.example.com")
 
     def test_invalid_base_url(self) -> None:
         with self.assertRaises(SeaArtError):
