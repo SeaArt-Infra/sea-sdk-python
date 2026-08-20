@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 from .errors import ERR_GENERAL, SeaArtError
 from .llm import LLMService
+from .billing import BillingService
 from .modal import ModalService
 from .passthrough import PassthroughService
 from .transport import TransportClient
@@ -14,6 +15,7 @@ DEFAULT_BASE_URL = "https://gateway.example.com"
 DEFAULT_MODEL_BASE_URL = DEFAULT_BASE_URL + "/model"
 DEFAULT_LLM_BASE_URL = DEFAULT_BASE_URL + "/llm"
 DEFAULT_PASSTHROUGH_BASE_URL = DEFAULT_MODEL_BASE_URL
+DEFAULT_BILLING_BASE_URL = DEFAULT_BASE_URL + "/monitor"
 DEFAULT_TIMEOUT = 300.0
 SDK_VERSION = "0.1.4"
 
@@ -25,6 +27,7 @@ class ClientConfig:
     model_base_url: str = ""
     llm_base_url: str = ""
     passthrough_base_url: str = ""
+    billing_base_url: str = ""
     project: str = ""
     timeout: float = DEFAULT_TIMEOUT
 
@@ -51,6 +54,13 @@ class Client:
             config.passthrough_base_url,
             model_base_url,
         )
+        billing_base_url = _resolve_service_url(
+            config.billing_base_url,
+            derive_from_root=bool(config.base_url),
+            root=base_url,
+            suffix="monitor",
+            fallback=DEFAULT_BILLING_BASE_URL,
+        )
 
         timeout = config.timeout if config.timeout > 0 else DEFAULT_TIMEOUT
         self.api_key = config.api_key
@@ -58,6 +68,7 @@ class Client:
         self.model_base_url = model_base_url
         self.llm_base_url = llm_base_url
         self.passthrough_base_url = passthrough_base_url
+        self.billing_base_url = billing_base_url
         self.project = config.project
 
         modal_transport = TransportClient(
@@ -81,14 +92,23 @@ class Client:
             user_agent=f"sa-python/{SDK_VERSION}",
             timeout=timeout,
         )
+        billing_transport = TransportClient(
+            api_key=self.api_key,
+            base_url=self.billing_base_url,
+            project=self.project,
+            user_agent=f"sa-python/{SDK_VERSION}",
+            timeout=timeout,
+        )
 
         self.modal = ModalService(modal_transport)
         self.llm = LLMService(llm_transport)
         self.passthrough = PassthroughService(passthrough_transport)
+        self.billing = BillingService(billing_transport)
 
         self.Modal = self.modal
         self.LLM = self.llm
         self.Passthrough = self.passthrough
+        self.Billing = self.billing
 
 
 def new(config: ClientConfig | None = None) -> Client:

@@ -22,6 +22,7 @@ Features:
 | [Face Scan](#face-scan) | `client.modal.scan_face(...)` | Detect face-related results in images or videos |
 | [Audio Scan](#audio-scan) | `client.modal.scan_audio(...)` | Detect audio content risks |
 | [LLM API](#llm-api) | `client.llm` / `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank compatible APIs |
+| [Billing API](#billing-api) | `client.billing` / `client.Billing` | Query the authenticated team's cost statement |
 
 ## Installation
 
@@ -47,7 +48,7 @@ client = sa.Client(
 )
 ```
 
-Configure the unified gateway address through `base_url`. The SDK uses it to call multimodal, LLM, and passthrough capabilities.
+Configure the unified gateway address through `base_url`. The SDK uses it to call multimodal, LLM, billing, and passthrough capabilities.
 
 ```python
 client = sa.Client(
@@ -61,6 +62,27 @@ client = sa.Client(
 ```
 
 Keep the selected model in the SDK payload's top-level `model` field. The SDK sends it as the `X-Model` header and removes it from the serialized JSON body. Do not pass `X-Model` with `WithHeader(...)` when the payload already contains `model`.
+
+## Billing API
+
+`client.billing.query(...)` calls `GET /monitor/api/v1/cost/billing`. The gateway derives the team from the Bearer token and injects `X-User-ID`; callers do not pass a team identifier. By default the query covers `develop` and `release`. Set `environment` to `develop` or `release` to select one environment.
+
+`start` and `end` define the time range. They accept RFC3339 timestamps such as `2026-08-19T00:00:00Z`, UTC date-times without a zone, date-only values such as `2026-08-19`, or Unix seconds. The range is `[start, end)`. When `end` is date-only, that whole day is included; without either value, the server defaults to the previous seven days.
+
+```python
+statement = client.billing.query(sa.BillingQuery(
+    start="2026-08-19T00:00:00Z",
+    end="2026-08-20T00:00:00Z",
+    environment="release",
+    page=1,
+    page_size=20,
+))
+print(statement.team, statement.summary.total_cost)
+for item in statement.items.items:
+    print(item.provider, item.model_group, item.total_cost)
+```
+
+Set `billing_base_url` only when the billing route is hosted separately; otherwise `base_url` derives it as `<base_url>/monitor`.
 
 ## Multimodal API
 
@@ -895,7 +917,7 @@ pip install --upgrade git+https://github.com/SeaArt-Infra/sea-sdk-python.git
 ## Workflow
 
 1. Initialize one `sa.Client` with the API key and, when required, gateway URL.
-2. Select `client.modal` for generation, model skills, precharge, or safety scans; `client.llm` for LLM APIs; and `client.passthrough` for vendor-native paths.
+2. Select `client.modal` for generation, model skills, precharge, or safety scans; `client.billing` for team-scoped cost statements; `client.llm` for LLM APIs; and `client.passthrough` for vendor-native paths.
 3. For a multimodal model, inspect `client.modal.get_model_skill(model)` before building model-specific `params`.
 4. Poll generation tasks with `task.wait(...)`, then use `task.urls()` only after completion.
 5. Decode successful LLM bytes or stream event data with `sa.Decode`; catch `sa.SeaArtError` at the request boundary.
@@ -952,6 +974,11 @@ print(task.urls())
 ```
 
 Use `client.modal.precharge(body)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `get_model_skill`.
+
+## Billing Queries
+
+Use `client.billing.query(sa.BillingQuery(...))` for the authenticated team's cost statement. The gateway derives the team from the Bearer token, so callers must not pass `team_alias`. The default environment scope is `develop` plus `release`; set `environment` to one of those values to select a single environment. Use `start`, `end`, `provider`, `credential_name`, `model_group`, `page`, and `page_size` for supported filters.
+Use RFC3339 or date-only values for `start`/`end`; the range is `[start, end)`, and omitted values default to the previous seven days.
 
 ## ComfyUI Quick Apps
 
