@@ -18,6 +18,7 @@ Features:
 | [Image/Video Safety Scan](#imagevideo-safety-scan) | `client.modal.scan_image(...)` | Detect content-safety risks in images, GIFs, or videos |
 | [Sensitive-Word Scan](#sensitive-word-scan) | `client.modal.scan_text(...)` | Detect sensitive words and combination-rule risks in text |
 | [Text Content Safety Scan](#text-content-safety-scan) | `client.modal.scan_text_content(...)` | Review short text risk level and category label |
+| [Character Quality Scan](#character-quality-scan) | `client.modal.scan_character_quality(...)` | Review character copy quality and safety |
 | [Visual Structured Text Fusion Scan](#visual-structured-text-fusion-scan) | `client.modal.scan_visual_structured_text_fusion(...)` | Scan digital-human cover images and structured copy together |
 | [Face Scan](#face-scan) | `client.modal.scan_face(...)` | Detect face-related results in images or videos |
 | [Audio Scan](#audio-scan) | `client.modal.scan_audio(...)` | Detect audio content risks |
@@ -655,6 +656,34 @@ result = client.modal.scan_text_content(
   }
 }
 ```
+
+## Character Quality Scan
+
+The character quality scan endpoint is `POST /v1/char/quality/scan`. It reviews character-copy quality and safety, and returns a grade such as `S`, `A+`, `A`, `B`, or `C`, together with the safety result. The request body is a flat JSON object: use either the production-line A fields (`first_msg`, `description`, `scenario`, `example_dialogue`) or the production-line B fields (`opening_line`, `character_introduction`, `scenario_setting`, `dialogue_examples`, `personality_setting`). All submitted values must be strings.
+
+```python
+result = client.modal.scan_character_quality(
+    sa.CharacterQualityScanRequest(
+        name="Xiaomei",
+        first_msg="Hello, I am Xiaomei.",
+        description="A thoughtful friend who enjoys painting.",
+        scenario="A cafe on a rainy day.",
+        example_dialogue="A: Hello\\nB: Welcome.",
+    ),
+)
+
+print(result.ok, result.level, result.safety_tag.tag)
+print(result.safety_tag.fields, result.usage.cost)
+```
+
+| Request field | Production line | Description |
+|------|------|------|
+| `name` | A / B | Character name |
+| `first_msg`, `description`, `scenario`, `example_dialogue` | A | Opening message, description, scenario, and dialogue example |
+| `opening_line`, `character_introduction`, `scenario_setting`, `dialogue_examples` | B | Opening message, description, scenario, and dialogue example |
+| `personality_setting` | B | Optional personality setting |
+
+`safety_tag.tag` is normally `normal` when no safety rule matches. `safety_tag.fields` contains field-level matches using the original request field names and may be omitted or empty. `usage.cost` is the gateway-injected charge for the call. Unmodeled response fields remain available in `result.extra`.
 
 ## Visual Structured Text Fusion Scan
 

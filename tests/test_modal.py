@@ -7,6 +7,7 @@ from seaart_sdk import (
     ERR_TASK_FAILED,
     FaceScanRequest,
     AudioScanRequest,
+    CharacterQualityScanRequest,
     ComfyUIInput,
     ImageScanRequest,
     ImageScanRiskTypeErotic,
@@ -895,6 +896,58 @@ class ModalServiceTests(unittest.TestCase):
         client = make_client()
         with self.assertRaises(SeaArtError):
             client.modal.scan_audio({"img_base64": "abc123", "rec_type": "custom"})
+
+    def test_scan_character_quality_posts_flat_body(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/char/quality/scan")
+            self.assertEqual(request_headers(request)["Authorization"], "Bearer test-key")
+            self.assertEqual(
+                request_json(request),
+                {
+                    "name": "Xiaomei",
+                    "first_msg": "Hello.",
+                    "description": "A thoughtful friend.",
+                    "scenario": "A cafe on a rainy day.",
+                    "example_dialogue": "A: Hello\\nB: Welcome.",
+                },
+            )
+            return json_response(
+                200,
+                {
+                    "ok": True,
+                    "level": "A",
+                    "safety_tag": {"tag": "normal"},
+                    "usage": {"cost": "0.001"},
+                    "request_id": "character-quality-1",
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            response = client.modal.scan_character_quality(
+                CharacterQualityScanRequest(
+                    name="Xiaomei",
+                    first_msg="Hello.",
+                    description="A thoughtful friend.",
+                    scenario="A cafe on a rainy day.",
+                    example_dialogue="A: Hello\\nB: Welcome.",
+                ),
+            )
+
+        self.assertTrue(response.ok)
+        self.assertEqual(response.level, "A")
+        self.assertIsNotNone(response.safety_tag)
+        self.assertEqual(response.safety_tag.tag, "normal")
+        self.assertEqual(response.safety_tag.fields, {})
+        self.assertIsNotNone(response.usage)
+        self.assertEqual(response.usage.cost, "0.001")
+        self.assertEqual(response.extra["request_id"], "character-quality-1")
+
+    def test_scan_character_quality_rejects_non_string_fields(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.scan_character_quality({"name": "Xiaomei", "level": 1})
 
     def test_wait_completes(self) -> None:
         polls = {"count": 0}

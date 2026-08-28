@@ -35,12 +35,12 @@ class BillingServiceTests(unittest.TestCase):
     def test_query_accepts_mapping_and_surfaces_envelope_errors(self) -> None:
         client = Client(ClientConfig(api_key="test-key", billing_base_url="https://billing.example.com"))
 
-        with patch_urlopen(lambda request: json_response(400, {"code": 400, "message": "X-User-ID header is required"})):
+        with patch_urlopen(lambda request: json_response(400, {"code": 400, "message": "billing query failed"})):
             with self.assertRaises(SeaArtError) as context:
                 client.billing.get({"environment": "develop"})
 
         self.assertEqual(context.exception.status, 400)
-        self.assertEqual(context.exception.message, "X-User-ID header is required")
+        self.assertEqual(context.exception.message, "billing query failed")
 
 
 if __name__ == "__main__":
