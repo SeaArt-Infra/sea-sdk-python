@@ -146,4 +146,6 @@ except sa.SeaArtError as exc:
     raise
 ```
 
+Use `client.modal.scan_character_quality(...)` for character-copy quality and safety review. Send a flat production-line A or B field set; the response exposes `level`, `safety_tag`, and `usage.cost`.
+
 Handle `ERR_AUTH`, `ERR_QUOTA`, `ERR_TIMEOUT`, `ERR_NETWORK`, and `ERR_TASK_FAILED` explicitly where retries or user feedback differ. For failed multimodal tasks, inspect `SeaArtError.task_id` and the model response before retrying.

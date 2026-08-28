@@ -10,6 +10,8 @@ from .modal_types import (
     APIError,
     AudioScanRequest,
     AudioScanResponse,
+    CharacterQualityScanRequest,
+    CharacterQualityScanResponse,
     ComfyUIInput,
     ComfyUITemplateSpecsResponse,
     FaceScanRequest,
@@ -282,6 +284,27 @@ class ModalService:
         if status >= 400:
             raise _http_error(status, payload)
         return decode(payload, TextContentScanResponse)
+
+    def scan_character_quality(
+        self,
+        request: CharacterQualityScanRequest | dict[str, object],
+        *options: RequestOption,
+    ) -> CharacterQualityScanResponse:
+        """Review character copy quality and safety through /v1/char/quality/scan."""
+        body = request.raw() if isinstance(request, CharacterQualityScanRequest) else dict(request)
+        if any(not isinstance(value, str) for value in body.values()):
+            raise SeaArtError(kind="general", message="character quality scan fields must be strings")
+
+        request_options = build_request_options(options)
+        status, payload = self._client.request(
+            "POST",
+            "/v1/char/quality/scan",
+            body,
+            request_options.headers,
+        )
+        if status >= 400:
+            raise _http_error(status, payload)
+        return decode(payload, CharacterQualityScanResponse)
 
     def scan_visual_structured_text_fusion(
         self,

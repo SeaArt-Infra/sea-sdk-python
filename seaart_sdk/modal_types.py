@@ -335,6 +335,63 @@ class TextContentScanResponse:
 
 
 @dataclass(slots=True)
+class CharacterQualityScanRequest:
+    """Request body for POST /v1/char/quality/scan.
+
+    Use either the production-line A fields or the production-line B fields in
+    one request. Empty fields are omitted from the serialized body.
+    """
+
+    name: str = ""
+    first_msg: str = ""
+    description: str = ""
+    scenario: str = ""
+    example_dialogue: str = ""
+    opening_line: str = ""
+    character_introduction: str = ""
+    scenario_setting: str = ""
+    dialogue_examples: str = ""
+    personality_setting: str = ""
+
+    def raw(self) -> dict[str, str]:
+        return {
+            key: value
+            for key, value in {
+                "name": self.name,
+                "first_msg": self.first_msg,
+                "description": self.description,
+                "scenario": self.scenario,
+                "example_dialogue": self.example_dialogue,
+                "opening_line": self.opening_line,
+                "character_introduction": self.character_introduction,
+                "scenario_setting": self.scenario_setting,
+                "dialogue_examples": self.dialogue_examples,
+                "personality_setting": self.personality_setting,
+            }.items()
+            if value
+        }
+
+
+@dataclass(slots=True)
+class CharacterQualitySafetyTag:
+    """Safety result returned by the character quality scan."""
+
+    tag: str = ""
+    fields: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class CharacterQualityScanResponse:
+    """Parsed response returned by POST /v1/char/quality/scan."""
+
+    ok: bool = False
+    level: str = ""
+    safety_tag: CharacterQualitySafetyTag | None = None
+    usage: Usage | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class VisualStructuredTextFusionScanRequest:
     """Request body for POST /v1/visual/structured/text/fusion/scan."""
 
