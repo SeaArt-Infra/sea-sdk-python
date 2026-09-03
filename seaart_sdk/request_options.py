@@ -61,3 +61,23 @@ def move_model_to_header(
 
     request_headers["X-Model"] = [model]
     return request_body, request_headers
+
+
+def keep_model_in_body(
+    body: Mapping[str, object], headers: Mapping[str, Sequence[str]]
+) -> tuple[dict[str, object], dict[str, list[str]]]:
+    """Validate an LLM model while keeping it in the serialized JSON body."""
+    request_body = dict(body)
+    request_headers = {key: list(values) for key, values in headers.items()}
+
+    if any(key.lower() == "x-model" for key in request_headers):
+        raise SeaArtError(
+            kind=ERR_GENERAL,
+            message="X-Model is not supported for LLM requests; set model in the request body",
+        )
+
+    if "model" in request_body:
+        model = request_body["model"]
+        if not isinstance(model, str) or not model.strip():
+            raise SeaArtError(kind=ERR_GENERAL, message="model must be a non-empty string")
+    return request_body, request_headers

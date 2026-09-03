@@ -7,6 +7,9 @@ from seaart_sdk import (
     Decode,
     EmbeddingsResponse,
     ERR_AUTH,
+    ERR_GENERAL,
+    ERR_QUOTA,
+    ERR_TIMEOUT,
     LLMModelListResponse,
     MessagesStreamChunk,
     MessagesStreamTextAssembler,
@@ -25,8 +28,8 @@ class LLMServiceTests(unittest.TestCase):
             self.assertEqual(request.get_method(), "POST")
             self.assertEqual(request_path(request), "/chat/completions")
             body = request_json(request)
-            self.assertNotIn("model", body)
-            self.assertEqual(request_headers(request)["X-model"], "gpt-4o-mini")
+            self.assertEqual(body["model"], "gpt-4o-mini")
+            self.assertNotIn("X-model", request_headers(request))
             self.assertEqual(body["reasoning_effort"], "low")
             return json_response(
                 200,
@@ -70,30 +73,53 @@ class LLMServiceTests(unittest.TestCase):
         response = Decode(raw, LLMModelListResponse)
         self.assertEqual(response.data[0].id, "gpt-4o-mini")
 
-    def test_model_and_x_model_header_conflict_is_rejected(self) -> None:
+    def test_x_model_header_is_rejected_for_llm_requests(self) -> None:
         client = make_client()
         with patch_urlopen(lambda request: self.fail("urlopen should not be called")):
-            with self.assertRaisesRegex(SeaArtError, "model and X-Model cannot both be set"):
+            with self.assertRaisesRegex(SeaArtError, "X-Model is not supported for LLM requests"):
                 client.llm.chat_completions(
                     {"model": "gpt-4o-mini", "messages": []},
                     WithHeader("X-Model", "another-model"),
                 )
 
-    def test_error_classification(self) -> None:
-        def handler(request):
-            return json_response(401, {"error": {"message": "invalid api key"}})
-
+    def test_list_models_rejects_x_model_header(self) -> None:
         client = make_client()
-        with patch_urlopen(handler):
-            with self.assertRaises(SeaArtError) as context:
-                client.llm.list_models()
-        self.assertEqual(context.exception.kind, ERR_AUTH)
+        with patch_urlopen(lambda request: self.fail("urlopen should not be called")):
+            with self.assertRaisesRegex(SeaArtError, "X-Model is not supported for LLM requests"):
+                client.llm.list_models(WithHeader("X-Model", "another-model"))
+
+    def test_http_errors_preserve_gateway_status_and_message(self) -> None:
+        cases = [
+            (400, ERR_GENERAL),
+            (401, ERR_AUTH),
+            (403, ERR_AUTH),
+            (404, ERR_GENERAL),
+            (408, ERR_TIMEOUT),
+            (429, ERR_QUOTA),
+            (500, ERR_GENERAL),
+            (502, ERR_GENERAL),
+            (503, ERR_GENERAL),
+            (504, ERR_TIMEOUT),
+        ]
+        for status, kind in cases:
+            with self.subTest(status=status):
+                client = make_client()
+                with patch_urlopen(
+                    lambda request, status=status: json_response(
+                        status, {"error": {"message": f"gateway-{status}"}}
+                    )
+                ):
+                    with self.assertRaises(SeaArtError) as context:
+                        client.llm.list_models()
+                self.assertEqual(context.exception.status, status)
+                self.assertEqual(context.exception.kind, kind)
+                self.assertEqual(context.exception.message, f"gateway-{status}")
 
     def test_chat_completions_stream(self) -> None:
         def handler(request):
             body = request_json(request)
-            self.assertNotIn("model", body)
-            self.assertEqual(request_headers(request)["X-model"], "gpt-4o-mini")
+            self.assertEqual(body["model"], "gpt-4o-mini")
+            self.assertNotIn("X-model", request_headers(request))
             self.assertTrue(body["stream"])
             return sse_response(
                 "event: message\n",
@@ -201,8 +227,8 @@ class LLMServiceTests(unittest.TestCase):
     def test_embeddings(self) -> None:
         def handler(request):
             body = request_json(request)
-            self.assertNotIn("model", body)
-            self.assertEqual(request_headers(request)["X-model"], "text-embedding-3-small")
+            self.assertEqual(body["model"], "text-embedding-3-small")
+            self.assertNotIn("X-model", request_headers(request))
             return json_response(
                 200,
                 {
