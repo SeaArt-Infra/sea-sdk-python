@@ -2,19 +2,34 @@ from __future__ import annotations
 
 import unittest
 
-from seaart_sdk import BillingQuery, BillingResponse, Client, ClientConfig, SeaArtError
+from seaart_sdk import BillingQuery, BillingResponse, Client, ClientConfig, SeaArtError, WithHeader
 from tests.test_helpers import json_response, patch_urlopen, request_headers, request_path
 
 
 class BillingServiceTests(unittest.TestCase):
     def test_query_builds_scoped_billing_request(self) -> None:
-        client = Client(ClientConfig(api_key="test-key", billing_base_url="https://billing.example.com"))
+        client = Client(ClientConfig(
+            api_key="test-key",
+            billing_base_url="https://billing.example.com",
+            headers={
+                "x-infra-project-id": "project-123",
+                "x-infra-af-id": "af-123",
+                "x-infra-session-id": "session-123",
+                "x-infra-user-id": "user-123",
+                "x-request-id": "request-123",
+            },
+        ))
 
         def handler(request):
             self.assertEqual(request.method, "GET")
             self.assertEqual(request_path(request), "/api/v1/cost/billing")
             self.assertEqual(request.full_url.split("?", 1)[1], "start=2026-08-19T00%3A00%3A00Z&environment=release&model_group=seedream&page=2&page_size=10")
             self.assertEqual(request_headers(request)["Authorization"], "Bearer test-key")
+            self.assertEqual(request_headers(request)["X-infra-project-id"], "project-123")
+            self.assertEqual(request_headers(request)["X-infra-af-id"], "af-123")
+            self.assertEqual(request_headers(request)["X-infra-session-id"], "session-123")
+            self.assertEqual(request_headers(request)["X-infra-user-id"], "user-123")
+            self.assertEqual(request_headers(request)["X-request-id"], "request-override")
             return json_response(200, {"code": 0, "message": "ok", "data": {
                 "team": "SeaComfyui",
                 "environments": ["release"],
@@ -25,7 +40,7 @@ class BillingServiceTests(unittest.TestCase):
         with patch_urlopen(handler):
             response = client.billing.query(BillingQuery(
                 start="2026-08-19T00:00:00Z", environment="release", model_group="seedream", page=2, page_size=10,
-            ))
+            ), WithHeader("X-Request-ID", "request-override"))
 
         self.assertIsInstance(response, BillingResponse)
         self.assertEqual(response.team, "SeaComfyui")

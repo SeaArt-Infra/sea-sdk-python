@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import posixpath
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 from .errors import ERR_GENERAL, SeaArtError
@@ -29,6 +30,7 @@ class ClientConfig:
     passthrough_base_url: str = ""
     billing_base_url: str = ""
     project: str = ""
+    headers: Mapping[str, str | Sequence[str]] = field(default_factory=dict)
     timeout: float = DEFAULT_TIMEOUT
 
 
@@ -70,11 +72,13 @@ class Client:
         self.passthrough_base_url = passthrough_base_url
         self.billing_base_url = billing_base_url
         self.project = config.project
+        self.headers = _normalize_headers(config.headers)
 
         modal_transport = TransportClient(
             api_key=self.api_key,
             base_url=self.model_base_url,
             project=self.project,
+            default_headers=self.headers,
             user_agent=f"sa-python/{SDK_VERSION}",
             timeout=timeout,
         )
@@ -82,6 +86,7 @@ class Client:
             api_key=self.api_key,
             base_url=self.llm_base_url,
             project=self.project,
+            default_headers=self.headers,
             user_agent=f"sa-python/{SDK_VERSION}",
             timeout=timeout,
         )
@@ -89,6 +94,7 @@ class Client:
             api_key=self.api_key,
             base_url=self.passthrough_base_url,
             project=self.project,
+            default_headers=self.headers,
             user_agent=f"sa-python/{SDK_VERSION}",
             timeout=timeout,
         )
@@ -96,6 +102,7 @@ class Client:
             api_key=self.api_key,
             base_url=self.billing_base_url,
             project=self.project,
+            default_headers=self.headers,
             user_agent=f"sa-python/{SDK_VERSION}",
             timeout=timeout,
         )
@@ -113,6 +120,13 @@ class Client:
 
 def new(config: ClientConfig | None = None) -> Client:
     return Client(config)
+
+
+def _normalize_headers(headers: Mapping[str, str | Sequence[str]]) -> dict[str, list[str]]:
+    normalized: dict[str, list[str]] = {}
+    for key, value in headers.items():
+        normalized[key] = [value] if isinstance(value, str) else [str(item) for item in value]
+    return normalized
 
 
 def _resolve_root_url(raw: str) -> str:
