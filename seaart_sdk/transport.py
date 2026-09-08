@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import socket
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from email.message import Message
 from urllib import error, request
 
@@ -17,6 +17,7 @@ class TransportClient:
     project: str
     user_agent: str
     timeout: float
+    default_headers: Mapping[str, Sequence[str]] = field(default_factory=dict)
 
     def request(
         self,
@@ -107,9 +108,11 @@ class TransportClient:
         }
         if self.project:
             request_headers["X-Project"] = self.project
+        for key, values in self.default_headers.items():
+            _set_header(request_headers, key, ", ".join(values))
         if headers:
             for key, values in headers.items():
-                request_headers[key] = ", ".join(values)
+                _set_header(request_headers, key, ", ".join(values))
 
         return request.Request(
             url=f"{self.base_url}{path}",
@@ -121,3 +124,10 @@ class TransportClient:
 
 def _headers_to_dict(headers: Message) -> dict[str, str]:
     return {key: value for key, value in headers.items()}
+
+
+def _set_header(headers: dict[str, str], key: str, value: str) -> None:
+    for existing in tuple(headers):
+        if existing.lower() == key.lower():
+            del headers[existing]
+    headers[key] = value
