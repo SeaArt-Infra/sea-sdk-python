@@ -24,7 +24,7 @@ Features:
 | [Audio Scan](#audio-scan) | `client.modal.scan_audio(...)` | Detect audio content risks |
 | [LLM API](#llm-api) | `client.llm` / `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank compatible APIs |
 | [Billing API](#billing-api) | `client.billing` / `client.Billing` | Query the authenticated team's cost statement |
-| [Gateway Context Headers](#gateway-context-headers) | `ClientConfig.headers` | Required caller context sent with every gateway request |
+| [Gateway Context Headers](#gateway-context-headers) | `sa.WithHeaders(...)` | Required caller context supplied with each gateway request |
 
 ## Installation
 
@@ -67,25 +67,32 @@ For LLM APIs, keep the selected model in the payload's top-level `model` field. 
 
 ## Gateway Context Headers
 
-Every gateway request requires caller context. Set these values once in `ClientConfig.headers`; the SDK attaches them to multimodal, LLM, billing, scan, passthrough, and task-polling requests. A per-call `WithHeaders(...)` value overrides the corresponding client default only for that request.
+Gateway API calls require caller context. These values commonly change with the end user or incoming request, so create them from the current request and pass them with `sa.WithHeaders(...)`. Do not place dynamic caller identity in a long-lived `ClientConfig.headers`. `task.wait(...)` does not require these headers.
 
 ```python
-client = sa.Client(
-    sa.ClientConfig(
-        api_key="sa-your-api-key",
-        base_url="https://gateway.example.com",
-        headers={
-            "x-infra-project-id": "project-id",
-            "x-infra-af-id": "af-id",
-            "x-infra-session-id": "session-id",
-            "x-infra-user-id": "user-id",
-            "x-request-id": "request-id",
-        },
-    )
+client = sa.Client(sa.ClientConfig(
+    api_key="sa-your-api-key",
+    base_url="https://gateway.example.com",
+))
+
+request_context = sa.WithHeaders({
+    "x-infra-project-id": project_id,
+    "x-infra-af-id": af_id,
+    "x-infra-session-id": session_id,
+    "x-infra-user-id": user_id,
+    "x-request-id": request_id,
+})
+
+raw = client.llm.chat_completions(
+    {
+        "model": "model-id",
+        "messages": [{"role": "user", "content": "Hello"}],
+    },
+    request_context,
 )
 ```
 
-Supply values from the calling service's request context. Do not hard-code another user's identity or reuse a client across requests with different context values.
+Pass `request_context` as the final argument to any direct gateway call, such as `client.llm.chat_completions(payload, request_context)`, `client.billing.query(query, request_context)`, or `client.modal.scan_image(request, request_context)`. `ClientConfig.headers` remains available only for headers that are genuinely fixed for the client's whole lifetime. Do not hard-code or reuse another caller's identity.
 
 ## Billing API
 
@@ -100,7 +107,7 @@ statement = client.billing.query(sa.BillingQuery(
     environment="release",
     page=1,
     page_size=20,
-))
+), request_context)
 print(statement.team, statement.summary.total_cost)
 for item in statement.items.items:
     print(item.provider, item.model_group, item.total_cost)
@@ -117,12 +124,13 @@ models = client.modal.list_models(
     sa.ModelSearchParams(
         query="",
         limit=2,
-    )
+    ),
+    request_context,
 )
 for hit in models.hits:
     print(hit["name"])
 
-skill = client.modal.get_model_skill("alibaba_animate_anyone_detect")
+skill = client.modal.get_model_skill("alibaba_animate_anyone_detect", request_context)
 print(skill)
 ```
 
@@ -163,6 +171,7 @@ task = client.modal.create(
             }
         ],
     },
+    request_context,
     sa.WithHeader("X-Trace-Id", "trace-123"),
 )
 
@@ -195,7 +204,7 @@ body = (
     .build()
 )
 
-task = client.modal.create(body)
+task = client.modal.create(body, request_context)
 ```
 
 `params` passes model parameters. The exact fields depend on the parameter details of the selected model.
@@ -215,7 +224,7 @@ print(task.status, task.progress, task.urls())
 You can also poll results directly after creating a task:
 
 ```python
-task = client.modal.create({"model": "alibaba_wanx26_i2v_flash"})
+task = client.modal.create({"model": "alibaba_wanx26_i2v_flash"}, request_context)
 task = task.wait(sa.WithPollInterval(5.0))
 ```
 
@@ -233,20 +242,21 @@ except sa.SeaArtError as exc:
 Use the ComfyUI helpers for quick-app templates. Pass one or more `template_id` values to `list_comfyui_templates` to retrieve each template's input fields, allowed values, and defaults. `create_comfyui_task` always routes with `X-Model: comfyui` and builds the required `input[0].params` envelope; pass only the template ID, field values, and optional `high_memory`.
 
 ```python
-templates = client.modal.list_comfyui_templates(["d32kq8le878c73876j5g"])
+templates = client.modal.list_comfyui_templates(["d32kq8le878c73876j5g"], request_context)
 for item in templates.templates[0].inputs:
     print(item.field, item.required, item.constraints)
 
 task = client.modal.create_comfyui_task(
-    template_id="d32kq8le878c73876j5g",
-    inputs=[
+    "d32kq8le878c73876j5g",
+    [
         sa.ComfyUIInput(
             field="image",
             value="https://image.cdn2.seaart.me/upload/input.webp",
         ),
         sa.ComfyUIInput(field="select", value=1),
     ],
-    high_memory=True,
+    True,
+    request_context,
 )
 task = task.wait(sa.WithPollInterval(3.0), sa.WithPollTimeout(300.0))
 print(task.urls())
@@ -272,7 +282,8 @@ resp = client.modal.precharge(
             }
         ],
         "moderation": False,
-    }
+    },
+    request_context,
 )
 
 print(resp.status)
@@ -294,7 +305,7 @@ body = (
     .build()
 )
 
-resp = client.modal.precharge(body)
+resp = client.modal.precharge(body, request_context)
 
 print(resp.status)
 print(resp.data.billing_model, resp.data.cost, resp.data.currency)
@@ -368,6 +379,7 @@ resp = client.passthrough.post(
         "model_name": "kling-v1",
         "prompt": "cinematic shot",
     },
+    request_context,
     sa.WithHeader("X-Trace-Id", "trace-123"),
 )
 
@@ -381,6 +393,7 @@ resp = client.passthrough.request_raw(
     "POST",
     "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
     b'{"contents":[{"parts":[{"text":"paint a cat"}]}]}',
+    request_context,
 )
 ```
 
@@ -413,7 +426,8 @@ result = client.modal.scan_image(
         is_video=False,
         canary="B",
         scene="avatar",
-    )
+    ),
+    request_context,
 )
 
 print(result.ok, result.nsfw_level, result.risk_types)
@@ -431,13 +445,13 @@ result = client.modal.scan_image({
     "risk_types": [sa.ImageScanRiskTypeErotic, sa.ImageScanRiskTypeViolent],
     "is_video": True,
     "duration": 12.5,
-})
+}, request_context)
 ```
 
 Base64 image content is also supported for image scans:
 
 ```python
-result = client.modal.scan_image(sa.ImageScanRequest(img_base64="base64-image-content"))
+result = client.modal.scan_image(sa.ImageScanRequest(img_base64="base64-image-content"), request_context)
 ```
 
 To process asynchronously, pass `callback_url`:
@@ -448,7 +462,8 @@ result = client.modal.scan_image(
         uri="https://example.com/image.jpg",
         callback_url="https://example.com/callback",
         callback_context={"trace_id": "trace-123"},
-    )
+    ),
+    request_context,
 )
 ```
 
@@ -547,7 +562,8 @@ result = client.modal.scan_text(
         scene=1,
         area_types=[sa.TextScanAreaTypeForeign],
         way=sa.TextScanWayDictionary,
-    )
+    ),
+    request_context,
 )
 
 print(result.usage)
@@ -610,7 +626,8 @@ result = client.modal.scan_text_content(
         text="hello world",
         canary="A",
         scene="user_name",
-    )
+    ),
+    request_context,
 )
 
 print(result.ok, result.level, result.label)
@@ -626,7 +643,8 @@ result = client.modal.scan_text_content(
         "text": "This is a text snippet to review",
         "canary": "A",
         "scene": "seasoul",
-    }
+    },
+    request_context,
 )
 ```
 
@@ -693,6 +711,7 @@ result = client.modal.scan_character_quality(
         scenario="A cafe on a rainy day.",
         example_dialogue="A: Hello\\nB: Welcome.",
     ),
+    request_context,
 )
 
 print(result.ok, result.level, result.safety_tag.tag)
@@ -726,7 +745,8 @@ result = client.modal.scan_visual_structured_text_fusion(
         canary="A",
         mode="mixed",
         ocr=1,
-    )
+    ),
+    request_context,
 )
 
 print(result.ok, result.nsfw_level, result.issue_source, result.risk_keys)
@@ -774,7 +794,8 @@ result = client.modal.scan_face(
         uri="https://example.com/image.jpg",
         is_video=0,
         scene="avatar",
-    )
+    ),
+    request_context,
 )
 
 print(result.ok, result.usage)
@@ -845,7 +866,8 @@ result = client.modal.scan_audio(
         uri="https://example.com/audio/test.mp3",
         rec_type="AUDIOPOLITICAL_MOAN_ANTHEN",
         duration=15.0,
-    )
+    ),
+    request_context,
 )
 
 print(result.risk_level, result.risk_description, result.usage)
@@ -903,6 +925,7 @@ raw = client.llm.chat_completions(
         "messages": [{"role": "user", "content": "hello"}],
         "max_tokens": 64,
     },
+    request_context,
     sa.WithHeader("X-Trace-Id", "trace-123"),
 )
 
@@ -931,7 +954,8 @@ stream = client.llm.chat_completions_stream(
     {
         "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": "hello"}],
-    }
+    },
+    request_context,
 )
 
 for event in stream:
@@ -995,26 +1019,35 @@ For LLM APIs, keep the selected model in the payload's top-level `model` field. 
 
 ## Gateway Context Headers
 
-The gateway requires `x-infra-project-id`, `x-infra-af-id`, `x-infra-session-id`, `x-infra-user-id`, and `x-request-id` on every request. Configure them through `ClientConfig.headers`; they are sent for generation, task polling, LLM, billing, scans, and passthrough requests. Per-call `sa.WithHeaders(...)` values override a client default for that call only.
+Gateway API calls require `x-infra-project-id`, `x-infra-af-id`, `x-infra-session-id`, `x-infra-user-id`, and `x-request-id`. These values are request-specific, so create them from the current caller and pass them with `sa.WithHeaders(...)`. `task.wait(...)` does not require these headers.
 
 ```python
-headers = {
-    "x-infra-project-id": "project-id",
-    "x-infra-af-id": "af-id",
-    "x-infra-session-id": "session-id",
-    "x-infra-user-id": "user-id",
-    "x-request-id": "request-id",
-}
-client = sa.Client(sa.ClientConfig(api_key="sa-your-api-key", headers=headers))
+request_context = sa.WithHeaders({
+    "x-infra-project-id": project_id,
+    "x-infra-af-id": af_id,
+    "x-infra-session-id": session_id,
+    "x-infra-user-id": user_id,
+    "x-request-id": request_id,
+})
+
+raw = client.llm.chat_completions(
+    {
+        "model": "model-id",
+        "messages": [{"role": "user", "content": "Hello"}],
+    },
+    request_context,
+)
 ```
+
+Pass `request_context` to every direct gateway API call, for example `client.llm.chat_completions(payload, request_context)` and `client.billing.query(query, request_context)`. Reserve `ClientConfig.headers` for client-lifetime constants only.
 
 ## Multimodal Tasks
 
 Search before choosing a model, and retrieve its model skill when exact parameter names matter:
 
 ```python
-models = client.modal.list_models(sa.ModelSearchParams(query="image", limit=10))
-skill = client.modal.get_model_skill("alibaba_wanx26_i2v_flash")
+models = client.modal.list_models(sa.ModelSearchParams(query="image", limit=10), request_context)
+skill = client.modal.get_model_skill("alibaba_wanx26_i2v_flash", request_context)
 ```
 
 Pass the documented model parameters in `input[*].params`, or build the same payload with `sa.NewTask(...)`:
@@ -1035,12 +1068,12 @@ body = (
     .build()
 )
 
-task = client.modal.create(body)
+task = client.modal.create(body, request_context)
 task = task.wait(sa.WithPollInterval(3.0), sa.WithPollTimeout(300.0))
 print(task.urls())
 ```
 
-Use `client.modal.precharge(body)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `get_model_skill`.
+Use `client.modal.precharge(body, request_context)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `get_model_skill`.
 
 ## Billing Queries
 
@@ -1052,20 +1085,21 @@ Use RFC3339 or date-only values for `start`/`end`; the range is `[start, end)`, 
 Retrieve the specification for the supplied `template_id` values before collecting user values. It identifies each template's required fields, input types, allowed values, and defaults. Use `create_comfyui_task` rather than manually constructing the generation body: the SDK fixes the model to `comfyui`, sends it as `X-Model`, and builds `input[0].params`.
 
 ```python
-templates = client.modal.list_comfyui_templates(["d32kq8le878c73876j5g"])
+templates = client.modal.list_comfyui_templates(["d32kq8le878c73876j5g"], request_context)
 for item in templates.templates[0].inputs:
     print(item.field, item.required, item.constraints)
 
 task = client.modal.create_comfyui_task(
-    template_id="d32kq8le878c73876j5g",
-    inputs=[
+    "d32kq8le878c73876j5g",
+    [
         sa.ComfyUIInput(
             field="image",
             value="https://image.cdn2.seaart.me/upload/input.webp",
         ),
         sa.ComfyUIInput(field="select", value=1),
     ],
-    high_memory=True,
+    True,
+    request_context,
 )
 task = task.wait(sa.WithPollInterval(3.0), sa.WithPollTimeout(300.0))
 print(task.urls())
@@ -1082,7 +1116,8 @@ raw = client.llm.chat_completions(
     {
         "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": "Hello"}],
-    }
+    },
+    request_context,
 )
 response = sa.Decode(raw, sa.ChatCompletionResponse)
 print(response.choices[0].message.content)
@@ -1092,7 +1127,8 @@ Use the dedicated streaming methods rather than setting `stream=True` on non-str
 
 ```python
 for event in client.llm.chat_completions_stream(
-    {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "Hello"}]}
+    {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "Hello"}]},
+    request_context,
 ):
     if event.err:
         raise event.err
@@ -1112,12 +1148,14 @@ Use the dedicated scan methods for image/video, face, audio, sensitive-word, sho
 
 ```python
 try:
-    result = client.modal.scan_text({"text": "Text to check"})
+    result = client.modal.scan_text({"text": "Text to check"}, request_context)
 except sa.SeaArtError as exc:
     if exc.kind in (sa.ERR_AUTH, sa.ERR_QUOTA, sa.ERR_TIMEOUT):
         raise
     raise
 ```
+
+Use `client.modal.scan_character_quality(...)` for character-copy quality and safety review. Send a flat production-line A or B field set; the response exposes `level`, `safety_tag`, and `usage.cost`.
 
 Handle `ERR_AUTH`, `ERR_QUOTA`, `ERR_TIMEOUT`, `ERR_NETWORK`, and `ERR_TASK_FAILED` explicitly where retries or user feedback differ. For failed multimodal tasks, inspect `SeaArtError.task_id` and the model response before retrying.
 </script>
