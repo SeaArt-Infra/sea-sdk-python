@@ -16,7 +16,7 @@ pip install --upgrade git+https://github.com/SeaArt-Infra/sea-sdk-python.git
 ## Workflow
 
 1. Initialize one `sa.Client` with the API key and, when required, gateway URL.
-2. Select `client.modal` for generation, model skills, precharge, or safety scans; `client.llm` for LLM APIs; and `client.passthrough` for vendor-native paths.
+2. Select `client.modal` for generation, model skills, precharge, or safety scans; `client.billing` for team-scoped cost statements; `client.llm` for LLM APIs; and `client.passthrough` for vendor-native paths.
 3. For a multimodal model, inspect `client.modal.get_model_skill(model)` before building model-specific `params`.
 4. Poll generation tasks with `task.wait(...)`, then use `task.urls()` only after completion.
 5. Decode successful LLM bytes or stream event data with `sa.Decode`; catch `sa.SeaArtError` at the request boundary.
@@ -42,26 +42,35 @@ For LLM APIs, keep the selected model in the payload's top-level `model` field. 
 
 ## Gateway Context Headers
 
-The gateway requires `x-infra-project-id`, `x-infra-af-id`, `x-infra-session-id`, `x-infra-user-id`, and `x-request-id` on every request. Configure them through `ClientConfig.headers`; the SDK sends them for generation, task polling, LLM, billing, scans, and passthrough requests. Per-call `sa.WithHeaders(...)` values override a client default for that call only.
+Gateway API calls require `x-infra-project-id`, `x-infra-af-id`, `x-infra-session-id`, `x-infra-user-id`, and `x-request-id`. These values are request-specific, so create them from the current caller and pass them with `sa.WithHeaders(...)`. `task.wait(...)` does not require these headers.
 
 ```python
-headers = {
-    "x-infra-project-id": "project-id",
-    "x-infra-af-id": "af-id",
-    "x-infra-session-id": "session-id",
-    "x-infra-user-id": "user-id",
-    "x-request-id": "request-id",
-}
-client = sa.Client(sa.ClientConfig(api_key="sa-your-api-key", headers=headers))
+request_context = sa.WithHeaders({
+    "x-infra-project-id": project_id,
+    "x-infra-af-id": af_id,
+    "x-infra-session-id": session_id,
+    "x-infra-user-id": user_id,
+    "x-request-id": request_id,
+})
+
+raw = client.llm.chat_completions(
+    {
+        "model": "model-id",
+        "messages": [{"role": "user", "content": "Hello"}],
+    },
+    request_context,
+)
 ```
+
+Pass `request_context` to every direct gateway API call, for example `client.llm.chat_completions(payload, request_context)` and `client.billing.query(query, request_context)`. Reserve `ClientConfig.headers` for client-lifetime constants only.
 
 ## Multimodal Tasks
 
 Search before choosing a model, and retrieve its model skill when exact parameter names matter:
 
 ```python
-models = client.modal.list_models(sa.ModelSearchParams(query="image", limit=10))
-skill = client.modal.get_model_skill("alibaba_wanx26_i2v_flash")
+models = client.modal.list_models(sa.ModelSearchParams(query="image", limit=10), request_context)
+skill = client.modal.get_model_skill("alibaba_wanx26_i2v_flash", request_context)
 ```
 
 Pass the documented model parameters in `input[*].params`, or build the same payload with `sa.NewTask(...)`:
@@ -82,32 +91,38 @@ body = (
     .build()
 )
 
-task = client.modal.create(body)
+task = client.modal.create(body, request_context)
 task = task.wait(sa.WithPollInterval(3.0), sa.WithPollTimeout(300.0))
 print(task.urls())
 ```
 
-Use `client.modal.precharge(body)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `get_model_skill`.
+Use `client.modal.precharge(body, request_context)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `get_model_skill`.
+
+## Billing Queries
+
+Use `client.billing.query(sa.BillingQuery(...))` for the authenticated team's cost statement. The gateway derives the team from the Bearer token, so callers must not pass `team_alias`. The default environment scope is `develop` plus `release`; set `environment` to one of those values to select a single environment. Use `start`, `end`, `provider`, `credential_name`, `model_group`, `page`, and `page_size` for supported filters.
+Use RFC3339 or date-only values for `start`/`end`; the range is `[start, end)`, and omitted values default to the previous seven days.
 
 ## ComfyUI Quick Apps
 
 Retrieve the specification for the supplied `template_id` values before collecting user values. It identifies each template's required fields, input types, allowed values, and defaults. Use `create_comfyui_task` rather than manually constructing the generation body: the SDK fixes the model to `comfyui`, sends it as `X-Model`, and builds `input[0].params`.
 
 ```python
-templates = client.modal.list_comfyui_templates(["d32kq8le878c73876j5g"])
+templates = client.modal.list_comfyui_templates(["d32kq8le878c73876j5g"], request_context)
 for item in templates.templates[0].inputs:
     print(item.field, item.required, item.constraints)
 
 task = client.modal.create_comfyui_task(
-    template_id="d32kq8le878c73876j5g",
-    inputs=[
+    "d32kq8le878c73876j5g",
+    [
         sa.ComfyUIInput(
             field="image",
             value="https://image.cdn2.seaart.me/upload/input.webp",
         ),
         sa.ComfyUIInput(field="select", value=1),
     ],
-    high_memory=True,
+    True,
+    request_context,
 )
 task = task.wait(sa.WithPollInterval(3.0), sa.WithPollTimeout(300.0))
 print(task.urls())
@@ -124,7 +139,8 @@ raw = client.llm.chat_completions(
     {
         "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": "Hello"}],
-    }
+    },
+    request_context,
 )
 response = sa.Decode(raw, sa.ChatCompletionResponse)
 print(response.choices[0].message.content)
@@ -134,7 +150,8 @@ Use the dedicated streaming methods rather than setting `stream=True` on non-str
 
 ```python
 for event in client.llm.chat_completions_stream(
-    {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "Hello"}]}
+    {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "Hello"}]},
+    request_context,
 ):
     if event.err:
         raise event.err
@@ -154,7 +171,7 @@ Use the dedicated scan methods for image/video, face, audio, sensitive-word, sho
 
 ```python
 try:
-    result = client.modal.scan_text({"text": "Text to check"})
+    result = client.modal.scan_text({"text": "Text to check"}, request_context)
 except sa.SeaArtError as exc:
     if exc.kind in (sa.ERR_AUTH, sa.ERR_QUOTA, sa.ERR_TIMEOUT):
         raise
