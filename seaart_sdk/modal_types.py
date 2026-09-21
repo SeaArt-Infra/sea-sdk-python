@@ -653,6 +653,10 @@ class TaskStreamEvent:
     - ``"error"``: the delivery failed or timed out after streaming had started;
       ``error_code`` / ``error_message`` describe it.
 
+    ``status`` mirrors the status reported by the frame (``in_progress`` on chunk
+    frames). ``err`` is set when a frame could not be parsed: the event is still
+    delivered so the caller can see the failure reason instead of losing it.
+
     Judge the end of the stream by ``event`` (``done`` / ``error``), never by the
     ``status`` of a chunk frame: chunk frames always report ``in_progress``, so a
     client that stops on ``status == "completed"`` would drop the ``done`` frame
@@ -661,12 +665,14 @@ class TaskStreamEvent:
 
     event: str = ""
     task_id: str = ""
+    status: str = ""
     cursor: int = 0
     chunks: list[Output] = field(default_factory=list)
     task: "Task | None" = None
     error_code: str = ""
     error_message: str = ""
     done: bool = False
+    err: BaseException | None = field(default=None, repr=False, compare=False)
     raw: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
     def urls(self) -> list[str]:

@@ -4,6 +4,7 @@ import unittest
 from urllib.parse import parse_qs, urlparse
 
 from seaart_sdk import (
+    ERR_NETWORK,
     ERR_TASK_FAILED,
     ERR_TIMEOUT,
     FaceScanRequest,
@@ -1383,6 +1384,75 @@ class ModalDeliveryTests(unittest.TestCase):
 
         self.assertEqual(events[0].urls(), ["https://cdn.example.com/0.mp4"])
         self.assertEqual(events[-1].task.id, "task_builder_s")
+
+    def test_create_stream_fails_when_the_stream_ends_without_a_terminal_event(self) -> None:
+        """提前断流不能被当成成功；已到达的分片仍要交付。"""
+
+        def handler(request):
+            return sse_response(
+                'event: output\ndata: {"id":"task_trunc","status":"in_progress",'
+                '"output":[{"content":[{"type":"audio","url":"https://cdn.example.com/0.wav"}]}],"cursor":1}\n\n',
+            )
+
+        client = make_client()
+        received = []
+        with patch_urlopen(handler):
+            with self.assertRaises(SeaArtError) as ctx:
+                for event in client.modal.create_stream({"model": "m"}):
+                    received.append(event)
+
+        self.assertEqual(ctx.exception.kind, ERR_NETWORK)
+        self.assertIn("terminal event", str(ctx.exception))
+        self.assertEqual(len(received), 1, "分片已经交付，不能因为报错丢掉")
+        self.assertEqual(received[0].urls(), ["https://cdn.example.com/0.wav"])
+
+    def test_create_stream_exposes_the_frame_status(self) -> None:
+        def handler(request):
+            return sse_response(
+                'event: output\ndata: {"id":"task_s","status":"in_progress",'
+                '"output":[{"content":[{"type":"audio","url":"https://cdn.example.com/0.wav"}]}],"cursor":1}\n\n',
+                'event: done\ndata: {"id":"task_s","status":"completed","output":[]}\n\n',
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            events = list(client.modal.create_stream({"model": "m"}))
+
+        self.assertEqual(events[0].status, "in_progress")
+        self.assertEqual(events[1].status, "completed")
+        self.assertFalse(events[0].done)
+        self.assertTrue(events[1].done)
+
+    def test_create_stream_reads_error_message_from_the_gateway(self) -> None:
+        def handler(request):
+            return sse_response(
+                'event: error\ndata: {"id":"task_s","status":"in_progress",'
+                '"error":{"code":"SYNC_TIMEOUT","error_message":"still running"}}\n\n',
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            events = list(client.modal.create_stream({"model": "m"}))
+
+        self.assertEqual(events[0].error_code, "SYNC_TIMEOUT")
+        self.assertEqual(events[0].error_message, "still running")
+        self.assertTrue(events[0].done)
+
+    def test_create_stream_surfaces_malformed_frames(self) -> None:
+        def handler(request):
+            return sse_response(
+                "event: output\ndata: {not json\n\n",
+                'event: done\ndata: {"id":"task_bad","status":"completed","output":[]}\n\n',
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            events = list(client.modal.create_stream({"model": "m"}))
+
+        self.assertIsNotNone(events[0].err, "畸形帧必须暴露失败原因")
+        self.assertIn("decode stream frame", str(events[0].err))
+        self.assertTrue(events[1].done, "单帧损坏不终止整条流")
+        self.assertEqual(events[1].task.status, "completed")
 
     def test_subscribe_requires_task_id(self) -> None:
         client = make_client()
