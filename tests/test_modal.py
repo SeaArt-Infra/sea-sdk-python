@@ -4,6 +4,7 @@ import unittest
 from urllib.parse import parse_qs, urlparse
 
 from seaart_sdk import (
+    ERR_GENERAL,
     ERR_NETWORK,
     ERR_TASK_FAILED,
     ERR_TIMEOUT,
@@ -1453,6 +1454,15 @@ class ModalDeliveryTests(unittest.TestCase):
         self.assertIn("decode stream frame", str(events[0].err))
         self.assertTrue(events[1].done, "单帧损坏不终止整条流")
         self.assertEqual(events[1].task.status, "completed")
+
+    def test_subscribe_rejects_a_negative_cursor(self) -> None:
+        client = make_client()
+        with patch_urlopen(lambda request: sse_response()):
+            with self.assertRaises(SeaArtError) as ctx:
+                list(client.modal.subscribe("task_x", -1))
+
+        self.assertEqual(ctx.exception.kind, ERR_GENERAL)
+        self.assertIn("non-negative integer", str(ctx.exception))
 
     def test_subscribe_requires_task_id(self) -> None:
         client = make_client()
