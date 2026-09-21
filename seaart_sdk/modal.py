@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterator
+from typing import Any
 from http import HTTPStatus
 from urllib.parse import quote, urlencode
 
-from .errors import ERR_NETWORK, ERR_TASK_FAILED, ERR_TIMEOUT, SeaArtError, new_http_error
+from .errors import ERR_GENERAL, ERR_NETWORK, ERR_TASK_FAILED, ERR_TIMEOUT, SeaArtError, new_http_error
 from .modal_types import (
     APIError,
     AudioScanRequest,
@@ -24,6 +26,8 @@ from .modal_types import (
     PrechargeResponse,
     PollOption,
     Task,
+    TaskStreamEvent,
+    TaskStreamFrame,
     TextContentScanRequest,
     TextContentScanResponse,
     VisualStructuredTextFusionScanRequest,
@@ -39,6 +43,7 @@ from .transport import TransportClient
 STATUS_COMPLETED = "completed"
 STATUS_FAILED = "failed"
 POLL_NETWORK_RETRY_LIMIT = 3
+SSE_CONTENT_TYPE = "text/event-stream"
 
 
 class ModalService:
@@ -392,15 +397,7 @@ class ModalService:
             if status == STATUS_COMPLETED:
                 return task
             if status == STATUS_FAILED:
-                message = "task failed"
-                code: int | None = None
-                if isinstance(task.error, APIError):
-                    detail = task.error.error_message or task.error.message
-                    if detail:
-                        message = f"task failed: {detail}"
-                    if task.error.code:
-                        code = task.error.code
-                raise SeaArtError(kind=ERR_TASK_FAILED, message=message, task_id=task_id, code=code)
+                raise _task_failed_error(task)
 
             time.sleep(config.interval)
 
@@ -409,6 +406,95 @@ class ModalService:
             message=f"task timed out after {_format_seconds(config.timeout)}",
             task_id=task_id,
         )
+
+    def create_sync(self, body: dict[str, object], *options: RequestOption) -> Task:
+        """Create a task and block until it finishes, returning the final result.
+
+        One call instead of ``create`` + ``wait``. The result is identical to what
+        :meth:`get` returns once the task is done (including ``usage``).
+
+        The route and the response format are the SDK's business: the caller passes
+        the same ``body`` as :meth:`create` and only says "give me the result". The
+        SDK uses the gateway's synchronous wait, which is a single ordinary request —
+        it keeps working in environments where streaming responses are blocked or
+        buffered by a proxy.
+
+        Long tasks: **do not use this method for tasks that may run longer than ~120
+        seconds.** That plain request is silent while it waits, so a proxy or load balancer
+        can drop it at its idle timeout. Use the asynchronous API instead — :meth:`create`
+        returns immediately and :meth:`wait` polls the task with short requests — and reach
+        for :meth:`create_stream` only when you want progress or early artifacts. If this call
+        reports a timeout, keep polling :meth:`wait` on the returned ``task_id``.
+
+        Raises:
+            SeaArtError: ``kind="task_failed"`` when the task itself failed;
+                ``kind="timeout"`` when the gateway gave up waiting, with
+                ``task_id`` set — resume it with :meth:`subscribe` (or keep polling
+                with :meth:`wait`) instead of submitting the work again.
+        """
+        request_options = build_request_options(options)
+        request_body, headers = move_model_to_header(body, request_options.headers)
+        headers["Accept"] = ["application/json"]
+        status, payload = self._client.request(
+            "POST",
+            "/v1/generation/sync",
+            request_body,
+            headers,
+        )
+        if status >= 400:
+            raise _sync_delivery_error(status, payload)
+        return _attach_service_and_check(decode(payload, Task), self)
+
+    def create_stream(
+        self, body: dict[str, object], *options: RequestOption
+    ) -> Iterator[TaskStreamEvent]:
+        """Create a task and stream its output as it is produced.
+
+        Yields :class:`TaskStreamEvent` values: ``output`` events carry the chunks
+        that arrived (one frame may carry several), the terminal ``done`` event
+        carries the complete result, and ``error`` reports a delivery failure or
+        timeout. Stop on ``event.done`` — do **not** stop on the ``status`` of a
+        chunk frame, which is always ``in_progress``.
+
+        Unlike :meth:`create_sync`, a failed task is reported through the ``done`` event
+        (``event.task.status == "failed"``) rather than raised, so callers can
+        inspect the payload while iterating.
+        """
+        request_options = build_request_options(options)
+        request_body, headers = move_model_to_header(body, request_options.headers)
+        headers["Accept"] = [SSE_CONTENT_TYPE]
+        response = self._client.request_stream(
+            "POST",
+            "/v1/generation/sync",
+            request_body,
+            headers,
+        )
+        return _iterate_task_stream(response, self)
+
+    def subscribe(
+        self,
+        task_id: str,
+        cursor: int = 0,
+        *options: RequestOption,
+    ) -> Iterator[TaskStreamEvent]:
+        """Subscribe to an existing task's incremental output.
+
+        Works for running tasks, already finished tasks (chunks replay from
+        ``cursor``) and tasks created by someone else. Pass the ``cursor`` of the
+        last event you consumed to resume without duplicates — this is what makes
+        a dropped streaming connection resumable.
+        """
+        if not isinstance(task_id, str) or not task_id.strip():
+            raise SeaArtError(kind=ERR_GENERAL, message="task_id is required")
+
+        request_options = build_request_options(options)
+        headers = {key: list(values) for key, values in request_options.headers.items()}
+        headers["Accept"] = [SSE_CONTENT_TYPE]
+        path = f"/v1/generation/task/{quote(task_id.strip(), safe='')}/stream"
+        if cursor > 0:
+            path = f"{path}?cursor={int(cursor)}"
+        response = self._client.request_stream("GET", path, None, headers)
+        return _iterate_task_stream(response, self)
 
 
 def _model_search_query(params: ModelSearchParams | None) -> str:
@@ -460,3 +546,139 @@ def _http_error(status: int, payload: bytes) -> SeaArtError:
             elif error_payload.get("message"):
                 message = str(error_payload["message"])
     return new_http_error(status, message)
+
+
+def _json_object(payload: bytes) -> dict[str, Any]:
+    try:
+        parsed = json.loads(payload.decode("utf-8"))
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _attach_service_and_check(task: Task, service: "ModalService") -> Task:
+    """Bind the owning service and raise when a synchronous delivery failed."""
+    task._service = service
+    if task.status.lower() == STATUS_FAILED:
+        raise _task_failed_error(task)
+    return task
+
+
+def _task_failed_error(task: Task) -> SeaArtError:
+    message = "task failed"
+    code: int | str | None = None
+    if isinstance(task.error, APIError):
+        detail = task.error.error_message or task.error.message
+        if detail:
+            message = f"task failed: {detail}"
+        if task.error.code:
+            code = task.error.code
+    return SeaArtError(
+        kind=ERR_TASK_FAILED,
+        message=message,
+        task_id=task.id or None,
+        code=code,
+    )
+
+
+def _sync_delivery_error(status: int, payload: bytes) -> SeaArtError:
+    """Build the error for a failed synchronous delivery.
+
+    Start from the generic HTTP error so the status keeps driving the error kind
+    (429 -> quota, 504 -> timeout, ...), then add what only this delivery knows:
+    the gateway error code and the task id. A wait timeout answers ``504`` with
+    the task id, which callers need in order to keep polling with
+    :meth:`ModalService.wait`.
+    """
+    error = _http_error(status, payload)
+    raw = _json_object(payload)
+    error_payload = raw.get("error")
+
+    code = ""
+    if isinstance(error_payload, dict):
+        raw_code = error_payload.get("code")
+        if raw_code is not None and str(raw_code):
+            code = str(raw_code)
+    if code == "SYNC_TIMEOUT":
+        error.kind = ERR_TIMEOUT
+    if code:
+        error.code = code
+    if isinstance(raw.get("id"), str) and raw["id"]:
+        error.task_id = raw["id"]
+    return error
+
+
+def _iterate_task_stream(response, service: "ModalService") -> Iterator[TaskStreamEvent]:
+    """Parse the generation SSE stream into :class:`TaskStreamEvent` values."""
+    status = getattr(response, "status", 200)
+    if status >= 400:
+        payload = response.read()
+        response.close()
+        raise _sync_delivery_error(status, payload)
+
+    event_name = ""
+    data_lines: list[str] = []
+    try:
+        while True:
+            raw_line = response.readline()
+            if raw_line == b"":
+                event = _task_stream_event(event_name, data_lines, service)
+                if event is not None:
+                    yield event
+                return
+
+            line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+            if line == "":
+                event = _task_stream_event(event_name, data_lines, service)
+                event_name = ""
+                data_lines = []
+                if event is None:
+                    continue
+                yield event
+                if event.done:
+                    return
+                continue
+            if line.startswith(":"):
+                continue  # keepalive comment sent while the task runs
+            if line.startswith("event:"):
+                event_name = line[len("event:") :].strip()
+            elif line.startswith("data:"):
+                data_lines.append(line[len("data:") :].strip())
+    finally:
+        response.close()
+
+
+def _task_stream_event(
+    event_name: str, data_lines: list[str], service: "ModalService"
+) -> TaskStreamEvent | None:
+    if not event_name and not data_lines:
+        return None
+
+    data = "\n".join(data_lines).strip()
+    if not event_name:
+        event_name = "output"
+    if data == "[DONE]":
+        return TaskStreamEvent(event="done", done=True)
+
+    raw_bytes = data.encode("utf-8")
+    raw = _json_object(raw_bytes)
+    event = TaskStreamEvent(event=event_name, raw=raw)
+    if isinstance(raw.get("id"), str):
+        event.task_id = raw["id"]
+
+    if event_name == "done":
+        task = decode(raw_bytes, Task)
+        task._service = service
+        event.task = task
+        event.done = True
+    elif event_name == "error":
+        error_payload = raw.get("error")
+        if isinstance(error_payload, dict):
+            event.error_code = str(error_payload.get("code") or "")
+            event.error_message = str(error_payload.get("message") or "")
+        event.done = True
+    else:
+        frame = decode(raw_bytes, TaskStreamFrame)
+        event.cursor = frame.cursor
+        event.chunks = frame.output
+    return event

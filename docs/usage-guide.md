@@ -160,6 +160,149 @@ for output in task.output:
         print(f"Type: {content.type}, URL: {content.url}")
 ```
 
+### Synchronous And Streamed Delivery
+
+Besides `create` + `wait`, the gateway offers two one-call deliveries. Both submit the same
+request body and return the same result shape; they differ only in how the result is
+delivered.
+
+**Synchronous: `create_sync()`**
+
+```python
+task = client.modal.create_sync({
+    "model": "alibaba_qwen3_tts_instruct_flash",
+    "input": [{"params": {"input": {"text": "hello", "voice": "Cherry"}}}],
+})
+
+print(task.status)          # completed
+print(task.urls())          # final artifact URLs
+print(task.usage.cost)      # gateway cost
+```
+
+`create_sync()` blocks until the task reaches a terminal state and returns the final `Task`. A
+failed task raises `SeaArtError(kind="task_failed")`, exactly like `wait()`.
+
+The route and the response format stay inside the SDK: `create_sync()` accepts the same `body`
+as `create()` and the caller only says "give me the result". Internally it uses the gateway's
+synchronous wait — a single ordinary request, which keeps working in environments where
+streaming responses are blocked or buffered by a proxy.
+
+> **Do not use `create_sync()` for tasks that may run longer than 120 seconds.** That wait is
+> silent: the connection receives nothing until the task finishes, so an intermediary (proxy,
+> ingress, load balancer) can drop it at its idle timeout — commonly 60s, sometimes 120s.
+>
+> For those tasks **use the asynchronous API instead**: `create()` returns immediately, and each
+> `wait()` / `get()` poll is a short request, so no idle timeout can cut the work. Use
+> `create_stream()` only when you want progress or to start consuming artifacts early — it holds
+> one long-lived connection and relies on keepalive comments to survive intermediaries.
+
+If the gateway itself gives up waiting, `create_sync()` raises `SeaArtError(kind="timeout")` with
+`task_id` set — resume that task with `client.modal.subscribe(task_id, cursor=last_cursor)` or
+keep polling it with `client.modal.wait(task_id)` instead of submitting the work again.
+
+**Streamed: `create_stream()`**
+
+```python
+for event in client.modal.create_stream(body):
+    if event.event == "output":
+        for url in event.urls():            # chunks that arrived in this frame
+            print(url)
+        cursor = event.cursor               # remember it to resume
+    elif event.event == "done":
+        task = event.task                   # final result, same shape as get()
+    else:                                    # "error"
+        print(event.error_code, event.error_message)
+```
+
+| Field | Meaning |
+|------|------|
+| `event.event` | `output` (chunks), `done` (terminal result), `error` (delivery failed or timed out) |
+| `event.chunks` | New chunks carried by this frame; one frame may carry several |
+| `event.cursor` | Consumption cursor; pass it to resume |
+| `event.task` | Final `Task` on the `done` event |
+| `event.task_id` | Task id, available on every event |
+
+Judge the end of the stream by `event`: `event.done` is true for both `done` and `error`.
+Chunk frames always report `status="in_progress"`, so never stop on
+`status == "completed"` — the `done` event carries `usage` and the final artifact.
+
+**Resume a stream: `subscribe()`**
+
+```python
+# resume from the last cursor you consumed, e.g. after a dropped connection
+for event in client.modal.subscribe(task.id, cursor=cursor):
+    ...
+```
+
+`subscribe()` works for running tasks, finished tasks (chunks replay from `cursor`) and
+tasks created by someone else. `task.stream()` does the same from cursor `0` on a task
+object.
+
+**Which one to use**
+
+| Situation | Use |
+|------|------|
+| Simple request/response, task finishes within ~120s | `create_sync()` |
+| **Task may run longer than ~120s** | **`create()` + `wait()`** (asynchronous; short polls, no idle timeout) |
+| Show progress, or start consuming artifacts early | `create_stream()` (one long-lived connection, kept alive by keepalives) |
+| The connection may drop and work must not be lost | `subscribe()` with the last `cursor` |
+
+All delivery styles return the same result shape; none of them requires the caller to know a
+gateway route or a streaming switch.
+
+**Complete example**
+
+```python
+import seaart_sdk as sa
+
+client = sa.Client(
+    sa.ClientConfig(
+        api_key="sa-your-api-key",
+        base_url="https://gateway.example.com",
+    )
+)
+
+body = {
+    "model": "your-model-id",
+    "input": [{"params": {"prompt": "a dog is running"}}],
+}
+
+# 1) Fast task (finishes within ~120s): one call, wait for the result.
+task = client.modal.create_sync(body)
+print(task.status, task.urls(), task.usage.cost)
+
+
+# 2) Long task (may exceed ~120s): use the asynchronous API. create() returns
+#    immediately and every poll is a short request, so no idle timeout on an
+#    intermediary can cut the work. Poll again later with client.modal.get().
+task = client.modal.create(body)
+task = client.modal.wait(task.id, sa.WithPollInterval(5.0), sa.WithPollTimeout(1800.0))
+print(task.status, task.urls())
+
+
+# 3) Same long task, but you also want progress or early artifacts: stream it.
+#    This holds one long-lived connection, kept alive by keepalive comments.
+cursor = 0
+for event in client.modal.create_stream(body):
+    if event.event == "output":
+        for chunk in event.chunks:          # one frame may carry several chunks
+            content = chunk.content[0]
+            print(content.chunk_index, content.url)
+        cursor = event.cursor               # remember it for a resume
+    elif event.event == "done":
+        task = event.task                   # final result, same shape as get()
+        print(task.status, task.usage.cost)
+    else:                                    # "error"
+        print(event.error_code, event.error_message)
+
+
+# 4) Dropped connection, or subscribing to a task created elsewhere:
+#    resume from the last cursor you consumed, without resubmitting work.
+for event in client.modal.subscribe(task.id, cursor=cursor):
+    if event.done:
+        print(event.task.status, event.task.urls())
+```
+
 ### ComfyUI Quick Apps
 
 Pass one or more `template_id` values to `list_comfyui_templates` to retrieve the corresponding quick-app template input fields and constraints. `create_comfyui_task` fixes the model to `comfyui` and builds the required request envelope, so callers provide only `template_id`, `inputs`, and optional `high_memory`.
