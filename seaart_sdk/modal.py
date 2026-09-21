@@ -618,13 +618,20 @@ def _iterate_task_stream(response, service: "ModalService") -> Iterator[TaskStre
 
     event_name = ""
     data_lines: list[str] = []
+    terminal = False
     try:
         while True:
             raw_line = response.readline()
             if raw_line == b"":
                 event = _task_stream_event(event_name, data_lines, service)
                 if event is not None:
+                    terminal = terminal or event.done
                     yield event
+                if not terminal:
+                    # A stream that ends without a terminal event is a truncated
+                    # delivery: the caller must not treat the partial result as
+                    # success.
+                    raise _stream_ended_early_error()
                 return
 
             line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
@@ -634,6 +641,8 @@ def _iterate_task_stream(response, service: "ModalService") -> Iterator[TaskStre
                 data_lines = []
                 if event is None:
                     continue
+                if event.done:
+                    terminal = True
                 yield event
                 if event.done:
                     return
@@ -665,20 +674,43 @@ def _task_stream_event(
     event = TaskStreamEvent(event=event_name, raw=raw)
     if isinstance(raw.get("id"), str):
         event.task_id = raw["id"]
+    if raw.get("status") is not None:
+        event.status = str(raw["status"])
 
-    if event_name == "done":
-        task = decode(raw_bytes, Task)
-        task._service = service
-        event.task = task
-        event.done = True
-    elif event_name == "error":
-        error_payload = raw.get("error")
-        if isinstance(error_payload, dict):
-            event.error_code = str(error_payload.get("code") or "")
-            event.error_message = str(error_payload.get("message") or "")
-        event.done = True
-    else:
-        frame = decode(raw_bytes, TaskStreamFrame)
-        event.cursor = frame.cursor
-        event.chunks = frame.output
+    try:
+        if event_name == "done":
+            task = decode(raw_bytes, Task)
+            task._service = service
+            event.task = task
+            event.done = True
+        elif event_name == "error":
+            error_payload = raw.get("error")
+            if isinstance(error_payload, dict):
+                event.error_code = str(error_payload.get("code") or "")
+                # The gateway uses ``message`` here, but ``error_message`` also
+                # appears on gateway error payloads: keep whichever is present so
+                # the failure reason is never dropped.
+                message = error_payload.get("message") or error_payload.get("error_message") or ""
+                event.error_message = str(message)
+            event.done = True
+        else:
+            frame = decode(raw_bytes, TaskStreamFrame)
+            event.cursor = frame.cursor
+            event.chunks = frame.output
+    except (SeaArtError, ValueError, TypeError) as exc:
+        # Surfacing beats swallowing: a malformed frame is reported on the event
+        # instead of becoming an empty event, and a raw JSON error never leaks to
+        # the caller.
+        event.err = (
+            exc
+            if isinstance(exc, SeaArtError)
+            else SeaArtError(kind=ERR_GENERAL, message=f"failed to decode stream frame: {exc}")
+        )
     return event
+
+
+def _stream_ended_early_error() -> SeaArtError:
+    return SeaArtError(
+        kind=ERR_NETWORK,
+        message="stream ended before a terminal event; resume with subscribe(task_id, cursor)",
+    )

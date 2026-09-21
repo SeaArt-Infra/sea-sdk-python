@@ -226,6 +226,14 @@ Judge the end of the stream by `event`: `event.done` is true for both `done` and
 Chunk frames always report `status="in_progress"`, so never stop on
 `status == "completed"` — the `done` event carries `usage` and the final artifact.
 
+Two failure modes to expect while iterating:
+
+- A stream that ends before a terminal event raises `SeaArtError(kind="network")`. The chunks
+  that already arrived were yielded first, so nothing is lost: resume the same task with
+  `subscribe(task_id, cursor=last_cursor)` instead of resubmitting it.
+- A frame that cannot be parsed is delivered with `event.err` set rather than being dropped, so
+  a single bad frame neither disappears nor hides its reason.
+
 **Resume a stream: `subscribe()`**
 
 ```python
