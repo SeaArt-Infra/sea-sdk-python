@@ -230,6 +230,42 @@ task = task.wait(sa.WithPollInterval(5.0))
 
 When a task fails, `wait()` raises `SeaArtError` with `kind`, `task_id`, the gateway error `code`, and the complete gateway error `message`.
 
+**Synchronous and streamed delivery**
+
+`create` + `wait` stays the default, but the gateway also supports a single-call wait and
+an incremental stream. Both take the same request body:
+
+```python
+# One call: waits for the terminal result
+task = client.modal.create_sync({"model": "alibaba_wanx26_i2v_flash"})
+
+# Incremental chunks as they are produced
+for event in client.modal.create_stream({"model": "alibaba_wanx26_i2v_flash"}):
+    if event.event == "output":
+        print(event.urls(), event.cursor)
+    elif event.event == "done":
+        task = event.task
+
+# Resume after a dropped connection, or subscribe to any task id
+for event in client.modal.subscribe(task.id, cursor=cursor):
+    ...
+```
+
+`create_sync()` decides the transport on its own — callers never pass a route or an `Accept`
+header. Internally it uses the gateway's synchronous wait: a single ordinary request, which keeps
+working where streaming responses are blocked or buffered by a proxy.
+
+> **Do not use `create_sync()` for tasks that may run longer than 120 seconds.** Its wait is
+> silent, so a proxy or load balancer can drop the connection at an idle timeout. Use the
+> **asynchronous API** for long tasks — `create()` returns immediately and each poll is a short
+> request: `task = client.modal.create(body)` then `client.modal.wait(task.id, ...)`. Reach for
+> `create_stream()` only when you want progress or early artifacts. See the
+> [usage guide](docs/usage-guide.md#synchronous-and-streamed-delivery) for a complete example.
+
+Stop on `event.done` (`done` and `error` both set it), never on the `status` of a chunk
+frame — chunk frames always report `in_progress`. See the
+[usage guide](docs/usage-guide.md#synchronous-and-streamed-delivery) for details.
+
 ```python
 try:
     task = task.wait(sa.WithPollTimeout(300.0))
