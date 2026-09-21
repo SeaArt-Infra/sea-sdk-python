@@ -486,6 +486,10 @@ class ModalService:
         """
         if not isinstance(task_id, str) or not task_id.strip():
             raise SeaArtError(kind=ERR_GENERAL, message="task_id is required")
+        if not isinstance(cursor, int) or isinstance(cursor, bool) or cursor < 0:
+            # Dropping a bad cursor would replay from the beginning and duplicate
+            # output the caller already consumed.
+            raise SeaArtError(kind=ERR_GENERAL, message="cursor must be a non-negative integer")
 
         request_options = build_request_options(options)
         headers = {key: list(values) for key, values in request_options.headers.items()}
