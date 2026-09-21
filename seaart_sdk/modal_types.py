@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, field as dataclass_field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .errors import ERR_GENERAL, SeaArtError
+
+if TYPE_CHECKING:
+    from .request_options import RequestOption
 
 
 @dataclass(slots=True)
@@ -59,6 +62,8 @@ class OutputContent:
     job_id: str = field(default="", metadata={"json": "jobId"})
     type: str = ""
     url: str = ""
+    chunk_index: int | None = None
+    """Set on streamed chunks: the chunk's position in the task's chunk list."""
 
 
 @dataclass(slots=True)
@@ -597,9 +602,77 @@ class Task:
             raise SeaArtError(kind=ERR_GENERAL, message="task is detached from client")
         return self._service.wait(self.id, *options)
 
+    def stream(
+        self, cursor: int = 0, *options: "RequestOption"
+    ) -> "Iterator[TaskStreamEvent]":
+        """Subscribe to this task's incremental output.
+
+        Works for running tasks, finished tasks (chunks replay from ``cursor``)
+        and tasks created elsewhere. Pass the ``cursor`` from the events you
+        already consumed to resume after a dropped connection.
+        """
+        if self._service is None:
+            raise SeaArtError(kind=ERR_GENERAL, message="task is detached from client")
+        return self._service.subscribe(self.id, cursor=cursor, *options)
+
     def urls(self) -> list[str]:
         urls: list[str] = []
         for item in self.output:
+            for content in item.content:
+                if content.url:
+                    urls.append(content.url)
+        return urls
+
+
+@dataclass(slots=True)
+class TaskStreamFrame:
+    """Raw ``output`` frame of a streamed delivery.
+
+    The gateway sends ``{"id", "model", "status", "output": [...], "cursor": n}``;
+    ``status`` is always ``in_progress`` (see :class:`TaskStreamEvent`).
+    """
+
+    id: str = ""
+    model: str = ""
+    status: str = ""
+    output: list[Output] = field(default_factory=list)
+    cursor: int = 0
+
+
+@dataclass(slots=True)
+class TaskStreamEvent:
+    """One event of a streamed generation delivery.
+
+    ``event`` is the event name sent by the gateway:
+
+    - ``"output"``: newly produced chunks; ``chunks`` holds them (one frame may
+      carry several) and ``cursor`` is the consumption cursor to pass when
+      resuming;
+    - ``"done"``: terminal event; ``task`` is the complete result, identical to
+      the task query payload (including ``usage``);
+    - ``"error"``: the delivery failed or timed out after streaming had started;
+      ``error_code`` / ``error_message`` describe it.
+
+    Judge the end of the stream by ``event`` (``done`` / ``error``), never by the
+    ``status`` of a chunk frame: chunk frames always report ``in_progress``, so a
+    client that stops on ``status == "completed"`` would drop the ``done`` frame
+    and lose ``usage``.
+    """
+
+    event: str = ""
+    task_id: str = ""
+    cursor: int = 0
+    chunks: list[Output] = field(default_factory=list)
+    task: "Task | None" = None
+    error_code: str = ""
+    error_message: str = ""
+    done: bool = False
+    raw: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+    def urls(self) -> list[str]:
+        """Return chunk URLs carried by this event (empty for ``done``)."""
+        urls: list[str] = []
+        for item in self.chunks:
             for content in item.content:
                 if content.url:
                     urls.append(content.url)

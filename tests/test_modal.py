@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlparse
 
 from seaart_sdk import (
     ERR_TASK_FAILED,
+    ERR_TIMEOUT,
     FaceScanRequest,
     AudioScanRequest,
     CharacterQualityScanRequest,
@@ -22,13 +23,23 @@ from seaart_sdk import (
     TextScanAreaTypeForeign,
     TextScanRequest,
     TextScanWayDictionary,
+    Task,
     Usage,
     WithHeader,
     WithPollInterval,
     WithPollTimeout,
 )
 
-from test_helpers import FakeResponse, json_response, make_client, patch_urlopen, request_headers, request_json, request_path
+from test_helpers import (
+    FakeResponse,
+    json_response,
+    make_client,
+    patch_urlopen,
+    request_headers,
+    request_json,
+    request_path,
+    sse_response,
+)
 
 
 class ModalServiceTests(unittest.TestCase):
@@ -1137,6 +1148,247 @@ class ModalServiceTests(unittest.TestCase):
         )
         self.assertEqual(body["input"][0]["params"]["n"], 1)
         self.assertEqual(body["input"][0]["params"]["resolution"], "1k")
+
+
+class ModalDeliveryTests(unittest.TestCase):
+    """Synchronous and streamed generation delivery (gateway /v1/generation/sync)."""
+
+    def test_create_sync_returns_the_final_result(self) -> None:
+        """create_sync() 只让调用方说"给我结果"：路由与响应格式都由 SDK 决定。"""
+
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/generation/sync")
+            self.assertEqual(request_headers(request)["Accept"], "application/json")
+            self.assertEqual(request_headers(request)["X-model"], "minimax_t2a")
+            self.assertNotIn("model", request_json(request))
+            return json_response(
+                200,
+                {
+                    "id": "task_sync_1",
+                    "status": "completed",
+                    "model": "minimax_t2a",
+                    "output": [{"content": [{"type": "audio", "url": "https://cdn.example.com/full.mp3"}]}],
+                    "usage": {"cost": "0.0017", "discount": 1},
+                    "metadata": {"completed_at": 1.2},
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            task = client.modal.create_sync({"model": "minimax_t2a", "input": [{"params": {"text": "hi"}}]})
+
+        self.assertEqual(task.id, "task_sync_1")
+        self.assertEqual(task.status, "completed")
+        self.assertEqual(task.urls(), ["https://cdn.example.com/full.mp3"])
+        self.assertAlmostEqual(task.usage.cost_float64(), 0.0017)
+
+    def test_create_sync_raises_when_the_task_failed(self) -> None:
+        def handler(request):
+            return json_response(
+                200,
+                {
+                    "id": "task_sync_failed",
+                    "status": "failed",
+                    "model": "minimax_t2a",
+                    "error": {"code": 110001, "message": "vendor rejected"},
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            with self.assertRaises(SeaArtError) as context:
+                client.modal.create_sync({"model": "minimax_t2a"})
+
+        self.assertEqual(context.exception.kind, ERR_TASK_FAILED)
+        self.assertEqual(context.exception.task_id, "task_sync_failed")
+        self.assertIn("vendor rejected", context.exception.message)
+
+    def test_create_sync_timeout_keeps_the_task_id(self) -> None:
+        def handler(request):
+            return json_response(
+                504,
+                {
+                    "id": "task_sync_slow",
+                    "status": "in_progress",
+                    "error": {"code": "SYNC_TIMEOUT", "message": "waited 15m0s, still running"},
+                },
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            with self.assertRaises(SeaArtError) as context:
+                client.modal.create_sync({"model": "slow_model"})
+
+        self.assertEqual(context.exception.kind, ERR_TIMEOUT)
+        self.assertEqual(context.exception.task_id, "task_sync_slow")
+        self.assertEqual(context.exception.code, "SYNC_TIMEOUT")
+
+    def test_create_stream_yields_chunks_then_done(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "POST")
+            self.assertEqual(request_path(request), "/v1/generation/sync")
+            self.assertEqual(request_headers(request)["Accept"], "text/event-stream")
+            return sse_response(
+                'event: output\ndata: {"id":"task_stream","model":"minimax_t2a","status":"in_progress",'
+                '"output":[{"content":[{"type":"audio","url":"https://cdn.example.com/0.wav","chunk_index":0}]}],"cursor":1}\n\n',
+                ": keepalive\n\n",
+                'event: output\ndata: {"id":"task_stream","model":"minimax_t2a","status":"in_progress",'
+                '"output":[{"content":[{"type":"audio","url":"https://cdn.example.com/1.wav","chunk_index":1}]}],"cursor":2}\n\n',
+                'event: done\ndata: {"id":"task_stream","status":"completed","model":"minimax_t2a",'
+                '"output":[{"content":[{"type":"audio","url":"https://cdn.example.com/full.wav"}]}],'
+                '"usage":{"cost":"0.0017","discount":1}}\n\n',
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            events = list(client.modal.create_stream({"model": "minimax_t2a"}))
+
+        self.assertEqual([event.event for event in events], ["output", "output", "done"])
+        self.assertEqual(events[0].task_id, "task_stream")
+        self.assertEqual(events[0].cursor, 1)
+        self.assertEqual(events[0].urls(), ["https://cdn.example.com/0.wav"])
+        self.assertEqual(events[0].chunks[0].content[0].chunk_index, 0)
+        # 分片帧的 status 恒为 in_progress：判断结束只能看 event
+        self.assertEqual(events[0].raw["status"], "in_progress")
+        self.assertFalse(events[0].done)
+        self.assertTrue(events[-1].done)
+        self.assertEqual(events[-1].task.status, "completed")
+        self.assertEqual(events[-1].task.urls(), ["https://cdn.example.com/full.wav"])
+        self.assertAlmostEqual(events[-1].task.usage.cost_float64(), 0.0017)
+
+    def test_create_stream_error_event_is_terminal(self) -> None:
+        def handler(request):
+            return sse_response(
+                'event: error\ndata: {"id":"task_stream","model":"minimax_t2a","status":"in_progress",'
+                '"error":{"code":"SYNC_TIMEOUT","message":"waited too long"}}\n\n',
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            events = list(client.modal.create_stream({"model": "minimax_t2a"}))
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].event, "error")
+        self.assertEqual(events[0].error_code, "SYNC_TIMEOUT")
+        self.assertEqual(events[0].error_message, "waited too long")
+        self.assertTrue(events[0].done)
+
+    def test_create_stream_raises_on_http_error_before_streaming(self) -> None:
+        def handler(request):
+            return json_response(429, {"error": {"code": 1002, "message": "rate limited"}})
+
+        client = make_client()
+        with patch_urlopen(handler):
+            with self.assertRaises(SeaArtError) as context:
+                list(client.modal.create_stream({"model": "minimax_t2a"}))
+
+        self.assertEqual(context.exception.kind, "quota")
+        self.assertEqual(context.exception.status, 429)
+
+    def test_subscribe_resumes_from_cursor(self) -> None:
+        def handler(request):
+            self.assertEqual(request.get_method(), "GET")
+            self.assertEqual(request_path(request), "/v1/generation/task/task_resume/stream")
+            self.assertEqual(parse_qs(urlparse(request.full_url).query), {"cursor": ["3"]})
+            self.assertEqual(request_headers(request)["Accept"], "text/event-stream")
+            return sse_response(
+                'event: output\ndata: {"id":"task_resume","status":"in_progress","output":[{"content":[{"type":"audio","url":"https://cdn.example.com/3.wav","chunk_index":3}]}],"cursor":4}\n\n',
+                'event: done\ndata: {"id":"task_resume","status":"completed","output":[{"content":[{"type":"audio","url":"https://cdn.example.com/full.wav"}]}],"usage":{"cost":"0.003"}}\n\n',
+            )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            events = list(client.modal.subscribe("task_resume", cursor=3))
+
+        self.assertEqual(events[0].cursor, 4)
+        self.assertEqual(events[0].urls(), ["https://cdn.example.com/3.wav"])
+        self.assertEqual(events[-1].task.id, "task_resume")
+
+    def test_task_stream_uses_subscribe(self) -> None:
+        task = Task(id="task_bound", status="in_progress")
+
+        def handler(request):
+            self.assertEqual(request_path(request), "/v1/generation/task/task_bound/stream")
+            return sse_response(
+                'event: done\ndata: {"id":"task_bound","status":"completed","output":[]}\n\n',
+            )
+
+        client = make_client()
+        task._service = client.modal
+        with patch_urlopen(handler):
+            events = list(task.stream())
+
+        self.assertTrue(events[-1].done)
+        self.assertEqual(events[-1].task.id, "task_bound")
+
+    def test_create_sync_accepts_the_typed_builder_body(self) -> None:
+        """NewTask(...).build() 与手写 dict 等价，新方法两者都吃。"""
+
+        def handler(request):
+            self.assertEqual(request_path(request), "/v1/generation/sync")
+            self.assertEqual(request_headers(request)["Accept"], "application/json")
+            self.assertEqual(request_headers(request)["X-model"], "alibaba_wanx26_i2v_flash")
+            body = request_json(request)
+            self.assertNotIn("model", body)
+            self.assertTrue(body["moderation"])
+            self.assertEqual(body["metadata"], {"trace_id": "trace-123"})
+            self.assertEqual(body["input"][0]["params"]["parameters"]["duration"], 5)
+            return json_response(
+                200,
+                {
+                    "id": "task_builder",
+                    "status": "completed",
+                    "model": "alibaba_wanx26_i2v_flash",
+                    "output": [{"content": [{"type": "url", "url": "https://cdn.example.com/out.mp4"}]}],
+                    "usage": {"cost": "0.2"},
+                },
+            )
+
+        built = (
+            NewTask("alibaba_wanx26_i2v_flash")
+            .moderation(True)
+            .params(
+                {
+                    "input": {"img_url": "https://x/y.jpg", "prompt": "a dog"},
+                    "parameters": {"resolution": "720P", "duration": 5},
+                }
+            )
+            .metadata("trace_id", "trace-123")
+            .build()
+        )
+
+        client = make_client()
+        with patch_urlopen(handler):
+            task = client.modal.create_sync(built)
+
+        self.assertEqual(task.status, "completed")
+        self.assertEqual(task.urls(), ["https://cdn.example.com/out.mp4"])
+
+    def test_create_stream_accepts_the_typed_builder_body(self) -> None:
+        def handler(request):
+            self.assertEqual(request_headers(request)["X-model"], "alibaba_wanx26_i2v_flash")
+            self.assertNotIn("model", request_json(request))
+            return sse_response(
+                'event: output\ndata: {"id":"task_builder_s","status":"in_progress",'
+                '"output":[{"content":[{"type":"url","url":"https://cdn.example.com/0.mp4"}]}],"cursor":1}\n\n',
+                'event: done\ndata: {"id":"task_builder_s","status":"completed","output":[]}\n\n',
+            )
+
+        built = NewTask("alibaba_wanx26_i2v_flash").params({"input": {"prompt": "a dog"}}).build()
+
+        client = make_client()
+        with patch_urlopen(handler):
+            events = list(client.modal.create_stream(built))
+
+        self.assertEqual(events[0].urls(), ["https://cdn.example.com/0.mp4"])
+        self.assertEqual(events[-1].task.id, "task_builder_s")
+
+    def test_subscribe_requires_task_id(self) -> None:
+        client = make_client()
+        with self.assertRaises(SeaArtError):
+            client.modal.subscribe("  ")
+
 
 if __name__ == "__main__":
     unittest.main()
